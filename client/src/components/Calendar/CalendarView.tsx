@@ -165,10 +165,10 @@ const CalendarView: React.FC = () => {
             <i className="fas fa-chevron-right"></i>
           </button>
         </div>
-        <h3 className="toolbar-label">
-          {formattedDate}
-          {weekNum}
-        </h3>
+          <h3 className="toolbar-label">
+            {formattedDate}
+            {weekNum}
+          </h3>
         <div className="toolbar-view-options">
           <button
             className={`toolbar-btn view-btn ${
@@ -243,23 +243,16 @@ const CalendarView: React.FC = () => {
   };
 
   // Custom day cell component
-  const CustomDayCell = ({
-    children,
-    value,
-  }: {
-    children: React.ReactNode;
-    value: Date;
-  }) => {
+  const CustomDayCell = ({ children, value }: { children: React.ReactNode; value: Date }) => {
     const today = moment().startOf("day").toDate();
     const isToday = moment(value).isSame(today, "day");
     const isWeekend = value.getDay() === 0 || value.getDay() === 6;
     const now = new Date();
     const startOfCurrentMonth = new Date(now.getFullYear(), now.getMonth(), 1);
     const endOfNextMonth = new Date(now.getFullYear(), now.getMonth() + 2, 0);
-    const isSchedulable =
-      value >= startOfCurrentMonth && value <= endOfNextMonth;
+    const isSchedulable = value >= startOfCurrentMonth && value <= endOfNextMonth;
     const isCurrentMonth = value.getMonth() === date.getMonth();
-
+  
     return (
       <div
         className={`
@@ -312,7 +305,7 @@ const CalendarView: React.FC = () => {
           components={{
             toolbar: CustomToolbar,
             dateCellWrapper: CustomDayCell,
-            header: CustomHeaderCell,
+            header: CustomHeaderCell
           }}
           formats={formats}
           popup
@@ -376,7 +369,7 @@ const CalendarView: React.FC = () => {
             setSelectedSlot(null);
           }}
           startTime={selectedSlot.start}
-          // Remove endTime prop since the component calculates it internally
+          endTime={selectedSlot.end}
         />
       )}
     </div>
