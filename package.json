@@ -1,0 +1,35 @@
+{
+  "name": "schadualingapp",
+  "version": "1.0.0",
+  "main": "index.ts",
+  "scripts": {
+    "dev": "NODE_DEV=development nodemon server/src/index.ts",
+    "build": "npm install && tsc && cd client && npm install && npm run build",
+"start": "NODE_ENV=production tsx server/src/index.ts"
+  },
+  "type": "commonjs",
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/cors": "^2.8.17",
+    "@types/mongoose": "^5.11.96",
+    "bcryptjs": "^3.0.2",
+    "cors": "^2.8.5",
+    "dotenv": "^16.5.0",
+    "express": "^5.1.0",
+    "jsonwebtoken": "^9.0.2",
+    "mogoose": "^0.0.1-security",
+    "mongoose": "^8.13.2"
+  },
+  "devDependencies": {
+    "@types/jsonwebtoken": "^9.0.9",
+    "@types/node": "^22.14.0",
+    "nodemon": "^3.1.9",
+    "ts-node": "^10.9.2",
+    "tsx": "^4.19.3",
+    "typescript": "^5.8.3"
+  }
+}

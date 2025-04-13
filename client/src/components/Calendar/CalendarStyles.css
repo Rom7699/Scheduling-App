@@ -1,0 +1,402 @@
+/* client/src/components/Calendar/CalendarStyles.css */
+
+/* Main container styling */
+.modern-calendar-container {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  color: #1f2937;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.calendar-wrapper {
+  background-color: white;
+  border-radius: 12px;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  overflow: hidden;
+  margin-bottom: 20px;
+}
+
+/* Override react-big-calendar default styles */
+.rbc-calendar {
+  border-radius: 12px;
+  border: none !important;
+  font-family: inherit;
+}
+
+.rbc-header {
+  padding: 12px 6px !important;
+  font-weight: 600 !important;
+  font-size: 14px;
+  border-bottom: 1px solid #e5e7eb !important;
+  background-color: #f9fafb;
+}
+
+.rbc-month-view {
+  border: none !important;
+  border-top: 1px solid #e5e7eb !important;
+}
+
+.rbc-day-bg {
+  background-color: white;
+}
+
+.rbc-day-bg + .rbc-day-bg {
+  border-left: 1px solid #f3f4f6 !important;
+}
+
+.rbc-month-row + .rbc-month-row {
+  border-top: 1px solid #f3f4f6 !important;
+}
+
+.rbc-off-range-bg {
+  background-color: #f9fafb !important;
+}
+
+.rbc-off-range {
+  color: #9ca3af !important;
+}
+
+.rbc-today {
+  background-color: #eff6ff !important;
+}
+
+.rbc-event {
+  border: none !important;
+  padding: 2px 8px !important;
+  border-radius: 4px !important;
+  font-size: 13px !important;
+}
+
+.rbc-show-more {
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  color: #4f46e5 !important;
+  background-color: transparent !important;
+}
+
+/* Time grid view styles */
+.rbc-time-header {
+  border-bottom: 1px solid #e5e7eb !important;
+}
+
+.rbc-time-content {
+  border-top: 1px solid #e5e7eb !important;
+}
+
+.rbc-timeslot-group {
+  border-bottom: 1px solid #f3f4f6 !important;
+}
+
+.rbc-time-gutter, .rbc-time-header-gutter {
+  background-color: #f9fafb !important;
+}
+
+.rbc-time-view {
+  border: none !important;
+}
+
+.rbc-time-header-content {
+  border-left: 1px solid #e5e7eb !important;
+}
+
+.rbc-time-slot {
+  font-size: 12px !important;
+  color: #6b7280 !important;
+}
+
+/* Custom toolbar styling */
+.calendar-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid #e5e7eb;
+  background-color: white;
+}
+
+.toolbar-date-nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.toolbar-label {
+  flex:1;
+  font-size: 20px;
+  font-weight: 600;
+  margin: 0;
+  color: #111827;
+  text-align: center;
+}
+
+.toolbar-view-options {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.toolbar-btn {
+  background-color: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  padding: 8px 14px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #4b5563;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.toolbar-btn:hover {
+  background-color: #f9fafb;
+  border-color: #d1d5db;
+}
+
+.toolbar-btn.active {
+  background-color: #4f46e5;
+  border-color: #4f46e5;
+  color: white;
+}
+
+.toolbar-btn.today-btn {
+  font-weight: 600;
+}
+
+.toolbar-btn.create-btn {
+  background-color: #4f46e5;
+  border-color: #4f46e5;
+  color: white;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  margin-left: 12px;
+}
+
+.toolbar-btn.create-btn:hover {
+  background-color: #4338ca;
+  border-color: #4338ca;
+}
+
+/* Custom header and day cell styles */
+.custom-header {
+  font-size: 14px;
+  font-weight: 600;
+  padding: 8px;
+  text-align: center;
+}
+
+.custom-header.today {
+  color: #4f46e5;
+}
+
+.custom-header.weekend {
+  color: #6b7280;
+}
+
+.custom-day-cell {
+  height: 100%;
+  min-height: 80px;
+  background-color: white;
+  transition: background-color 0.2s ease;
+}
+
+.custom-day-cell:hover {
+  background-color: #f9fafb;
+}
+
+.custom-day-cell.today {
+  background-color: #eff6ff;
+}
+
+.custom-day-cell.weekend {
+  background-color: #f9fafb;
+}
+
+.custom-day-cell.different-month {
+  background-color: #f9fafb;
+  color: #9ca3af;
+}
+
+.custom-day-cell.schedulable {
+  cursor: pointer;
+}
+
+.day-cell-header {
+  display: flex;
+  justify-content: flex-end;
+  padding: 4px 8px;
+}
+
+.day-number {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.today .day-number {
+  background-color: #4f46e5;
+  color: white;
+}
+
+.day-cell-content {
+  padding: 0 4px;
+}
+
+/* Calendar legend styling */
+.calendar-legend {
+  background-color: white;
+  border-radius: 8px;
+  padding: 16px;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+  margin-bottom: 20px;
+}
+
+.legend-title {
+  font-weight: 600;
+  margin-bottom: 10px;
+  font-size: 14px;
+  color: #4b5563;
+}
+
+.legend-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.legend-color {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+}
+
+.legend-label {
+  font-size: 13px;
+  color: #6b7280;
+}
+
+/* Loading indicator */
+.calendar-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 400px;
+  background-color: white;
+  border-radius: 12px;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+.calendar-loading p {
+  margin-top: 16px;
+  color: #6b7280;
+  font-size: 16px;
+}
+
+/* Modal enhancements */
+.modal-content {
+  border-radius: 12px;
+  border: none;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+}
+
+.modal-header {
+  border-bottom: 1px solid #f3f4f6;
+  padding: 16px 24px;
+}
+
+.modal-body {
+  padding: 24px;
+}
+
+.modal-footer {
+  border-top: 1px solid #f3f4f6;
+  padding: 16px 24px;
+}
+
+.modal-title {
+  font-weight: 600;
+  color: #111827;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .calendar-toolbar {
+    flex-direction: column;
+    gap: 12px;
+    align-items: flex-start;
+  }
+  
+  .toolbar-view-options {
+    width: 100%;
+    justify-content: space-between;
+  }
+  
+  .toolbar-btn {
+    padding: 6px 10px;
+    font-size: 13px;
+  }
+  
+  .toolbar-btn.create-btn {
+    margin-left: 0;
+  }
+  
+  .toolbar-label {
+    font-size: 18px;
+  }
+}
+
+@media (max-width: 576px) {
+  .legend-items {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* Fix the gap between date headers and time slots in week view */
+.rbc-time-view .rbc-allday-cell {
+  height: 0;
+  min-height: 0;
+  position: relative;
+  display: none;
+}
+
+.rbc-time-view .rbc-row-bg {
+  display: none;
+}
+
+.rbc-time-view .rbc-time-header-gutter {
+  border-right: 1px solid #ddd;
+}
+
+/* Remove extra spacing at top of time content */
+.rbc-time-content {
+  border-top: none;
+}
+
+/* Adjust time header to flow seamlessly with content */
+.rbc-time-header {
+  border-bottom: none;
+}
+
+.rbc-time-header-content {
+  border-left: none;
+  min-height: auto;
+}
+
+/* Make the labels more compact */
+.rbc-header {
+  padding: 8px 3px;
+}

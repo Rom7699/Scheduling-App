@@ -1,0 +1,41 @@
+.home-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 20px;
+    color: #334155;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  }
+  
+  /* Hero Section */
+  .hero-section {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 60px 0;
+    min-height: 70vh;
+  }
+  
+  .hero-content {
+    flex: 1;
+    max-width: 550px;
+  }
+  
+  .hero-content h1 {
+    font-size: 3.2rem;
+    font-weight: 700;
+    background: linear-gradient(135deg, #5b7fff, #9380ff);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 24px;
+  }
+  
+  .hero-subtitle {
+    font-size: 1.25rem;
+    line-height: 1.7;
+    color: #64748b;
+    margin-bottom: 40px;
+  }
+  
+  .hero-image {
+    flex: 1;
+    display: flex;
