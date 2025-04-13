@@ -7,7 +7,7 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': {
-        target: 'https://scheduling-app-server.onrender.com',
+        target: 'http://localhost:5500',
         changeOrigin: true,
         secure: false,
       }

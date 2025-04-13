@@ -5,7 +5,10 @@
   "scripts": {
     "dev": "NODE_ENV=development nodemon server/src/index.ts",
     "build": "npm install && tsc && cd client && npm install && npm run build",
-    "start": "NODE_ENV=production node server/dist/index.js"
+    "start": "NODE_ENV=production node server/dist/index.js",
+    "test:server": "cd server && NODE_ENV=test jest --detectOpenHandles",
+    "test:client": "cd client && vitest run",
+    "test:watch": "cd client && vitest"
   },
   "type": "commonjs",
   "keywords": [],

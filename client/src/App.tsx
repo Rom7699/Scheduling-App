@@ -15,7 +15,7 @@ import './index.css';
 
 // Set base URL for API requests
 // With Vite, use import.meta.env instead of process.env
-axios.defaults.baseURL =  'https://scheduling-app-server.onrender.com';
+axios.defaults.baseURL = import.meta.env.VITE_API_URL || 'http://localhost:5500';
 console.log('API URL:', axios.defaults.baseURL);
 
 const App: React.FC = () => {
