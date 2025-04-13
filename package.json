@@ -1,11 +1,11 @@
 {
   "name": "schadualingapp",
   "version": "1.0.0",
-  "main": "index.ts",
+  "main": "dist/index.js",
   "scripts": {
-    "dev": "NODE_DEV=development nodemon server/src/index.ts",
+    "dev": "NODE_ENV=development nodemon server/src/index.ts",
     "build": "npm install && tsc && cd client && npm install && npm run build",
-"start": "NODE_ENV=production tsx server/src/index.ts"
+    "start": "NODE_ENV=production node server/dist/index.js"
   },
   "type": "commonjs",
   "keywords": [],
