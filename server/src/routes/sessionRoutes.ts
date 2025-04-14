@@ -5,6 +5,7 @@ import {
   getSessionById, 
   updateSessionStatus, 
   cancelSession,
+  deleteSession,  // New method
   getCalendarMonth,
   getCalendarWeek,
   getCalendarDay
@@ -18,7 +19,8 @@ router.post('/', auth, createSession);
 router.get('/', auth, getSessions);
 router.get('/:id', auth, getSessionById);
 router.put('/:id/status', auth, adminOnly, updateSessionStatus);
-router.delete('/:id', auth, cancelSession); // No change needed here, we'll handle the cancellation option in the controller
+router.delete('/:id', auth, cancelSession); 
+router.delete('/:id/permanent', auth, adminOnly, deleteSession); // New route for permanent deletion
 
 // Calendar routes
 router.get('/calendar/month/:year/:month', auth, getCalendarMonth);

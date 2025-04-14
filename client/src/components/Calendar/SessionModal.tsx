@@ -1,9 +1,9 @@
 // client/src/components/Calendar/SessionModal.tsx
-import React, { useState } from 'react';
-import moment from 'moment';
-import { Session } from '../../types';
-import { useSession } from '../../context/SessionContext';
-import { useAuth } from '../../context/AuthContext';
+import React, { useState } from "react";
+import moment from "moment";
+import { Session } from "../../types";
+import { useSession } from "../../context/SessionContext";
+import { useAuth } from "../../context/AuthContext";
 
 interface SessionModalProps {
   session: Session;
@@ -11,14 +11,21 @@ interface SessionModalProps {
   onClose: () => void;
 }
 
-const SessionModal: React.FC<SessionModalProps> = ({ session, show, onClose }) => {
-  const { updateSessionStatus, cancelSession } = useSession();
+const SessionModal: React.FC<SessionModalProps> = ({
+  session,
+  show,
+  onClose,
+}) => {
+  const { updateSessionStatus, cancelSession, deleteSession } = useSession();
   const { user } = useAuth();
   const [showCancelDialog, setShowCancelDialog] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [cancelFutureSessions, setCancelFutureSessions] = useState(false);
-  
+  const [deleteAllRelated, setDeleteAllRelated] = useState(false);
+
   const isAdmin = user?.isAdmin;
-  const isOwner = typeof session.user !== 'string' && user?.id === session.user.id;
+  const isOwner =
+    typeof session.user !== "string" && user?.id === session.user.id;
   const isRecurring = session.isRecurring;
 
   if (!show) {
@@ -28,28 +35,28 @@ const SessionModal: React.FC<SessionModalProps> = ({ session, show, onClose }) =
   // Get status badge class
   const getStatusBadgeClass = () => {
     switch (session.status) {
-      case 'approved':
-        return 'bg-success';
-      case 'pending':
-        return 'bg-warning text-dark';
-      case 'rejected':
-        return 'bg-danger';
-      case 'cancelled':
-        return 'bg-secondary';
+      case "approved":
+        return "bg-success";
+      case "pending":
+        return "bg-warning text-dark";
+      case "rejected":
+        return "bg-danger";
+      case "cancelled":
+        return "bg-secondary";
       default:
-        return 'bg-primary';
+        return "bg-primary";
     }
   };
 
   // Handle approve
   const handleApprove = () => {
-    updateSessionStatus(session._id, 'approved');
+    updateSessionStatus(session._id, "approved");
     onClose();
   };
 
   // Handle reject
   const handleReject = () => {
-    updateSessionStatus(session._id, 'rejected');
+    updateSessionStatus(session._id, "rejected");
     onClose();
   };
 
@@ -69,26 +76,46 @@ const SessionModal: React.FC<SessionModalProps> = ({ session, show, onClose }) =
     onClose();
   };
 
+  // Handle delete (admin only)
+  const handleDelete = () => {
+    if (isRecurring) {
+      setShowDeleteDialog(true);
+    } else {
+      performDelete(false);
+    }
+  };
+
+  // Perform the actual deletion
+  const performDelete = (deleteAll: boolean) => {
+    deleteSession(session._id, deleteAll);
+    setShowDeleteDialog(false);
+    onClose();
+  };
+
   // Get recurrence text
   const getRecurrenceText = () => {
     if (!session.isRecurring) return null;
-    
-    let frequencyText = '';
+
+    let frequencyText = "";
     switch (session.recurrenceType) {
-      case 'weekly':
-        frequencyText = 'Weekly';
+      case "weekly":
+        frequencyText = "Weekly";
         break;
-      case 'biweekly':
-        frequencyText = 'Every two weeks';
+      case "biweekly":
+        frequencyText = "Every two weeks";
         break;
-      case 'monthly':
-        frequencyText = 'Monthly';
+      case "monthly":
+        frequencyText = "Monthly";
         break;
       default:
         return null;
     }
-    
-    return `${frequencyText} until ${session.recurrenceEndDate ? moment(session.recurrenceEndDate).format('MMMM D, YYYY') : 'N/A'}`;
+
+    return `${frequencyText} until ${
+      session.recurrenceEndDate
+        ? moment(session.recurrenceEndDate).format("MMMM D, YYYY")
+        : "N/A"
+    }`;
   };
 
   // Render the main session modal
@@ -100,9 +127,14 @@ const SessionModal: React.FC<SessionModalProps> = ({ session, show, onClose }) =
             <div className="modal-header d-flex align-items-center">
               <h5 className="modal-title">{session.title}</h5>
               <span className={`badge ms-2 ${getStatusBadgeClass()}`}>
-                {session.status.charAt(0).toUpperCase() + session.status.slice(1)}
+                {session.status.charAt(0).toUpperCase() +
+                  session.status.slice(1)}
               </span>
-              <button type="button" className="btn-close" onClick={onClose}></button>
+              <button
+                type="button"
+                className="btn-close"
+                onClick={onClose}
+              ></button>
             </div>
             <div className="modal-body">
               <div className="session-info">
@@ -110,16 +142,19 @@ const SessionModal: React.FC<SessionModalProps> = ({ session, show, onClose }) =
                   <div className="d-flex align-items-center mb-2">
                     <i className="far fa-calendar me-2 text-primary"></i>
                     <span className="fw-bold">Date:</span>
-                    <span className="ms-2">{moment(session.startTime).format('dddd, MMMM Do YYYY')}</span>
+                    <span className="ms-2">
+                      {moment(session.startTime).format("dddd, MMMM Do YYYY")}
+                    </span>
                   </div>
                   <div className="d-flex align-items-center">
                     <i className="far fa-clock me-2 text-primary"></i>
                     <span className="fw-bold">Time:</span>
                     <span className="ms-2">
-                      {moment(session.startTime).format('h:mm A')} - {moment(session.endTime).format('h:mm A')}
+                      {moment(session.startTime).format("h:mm A")} -{" "}
+                      {moment(session.endTime).format("h:mm A")}
                     </span>
                   </div>
-                  
+
                   {/* Show recurrence info if this is a recurring session */}
                   {isRecurring && (
                     <div className="d-flex align-items-center mt-2">
@@ -129,12 +164,14 @@ const SessionModal: React.FC<SessionModalProps> = ({ session, show, onClose }) =
                     </div>
                   )}
                 </div>
-                
+
                 <div className="session-description mb-4">
                   <h6 className="fw-bold">Description</h6>
-                  <p className="mb-0">{session.description || 'No description provided.'}</p>
+                  <p className="mb-0">
+                    {session.description || "No description provided."}
+                  </p>
                 </div>
-                
+
                 <div className="session-user">
                   <h6 className="fw-bold">Requested by</h6>
                   <div className="d-flex align-items-center">
@@ -142,14 +179,20 @@ const SessionModal: React.FC<SessionModalProps> = ({ session, show, onClose }) =
                       <i className="fas fa-user-circle fs-4 text-secondary"></i>
                     </div>
                     <div className="user-info">
-                      <div>{typeof session.user !== 'string' ? session.user.name : 'Unknown User'}</div>
+                      <div>
+                        {typeof session.user !== "string"
+                          ? session.user.name
+                          : "Unknown User"}
+                      </div>
                       <small className="text-muted">
-                        {typeof session.user !== 'string' ? session.user.email : ''}
+                        {typeof session.user !== "string"
+                          ? session.user.email
+                          : ""}
                       </small>
                     </div>
                   </div>
                 </div>
-                
+
                 <div className="session-meta mt-4">
                   <small className="text-muted">
                     Created {moment(session.createdAt).fromNow()}
@@ -158,9 +201,12 @@ const SessionModal: React.FC<SessionModalProps> = ({ session, show, onClose }) =
               </div>
             </div>
             <div className="modal-footer">
-              {isAdmin && session.status === 'pending' && (
+              {isAdmin && session.status === "pending" && (
                 <div className="admin-actions me-auto">
-                  <button className="btn btn-success me-2" onClick={handleApprove}>
+                  <button
+                    className="btn btn-success me-2"
+                    onClick={handleApprove}
+                  >
                     <i className="fas fa-check me-1"></i> Approve
                   </button>
                   <button className="btn btn-danger" onClick={handleReject}>
@@ -168,8 +214,23 @@ const SessionModal: React.FC<SessionModalProps> = ({ session, show, onClose }) =
                   </button>
                 </div>
               )}
-              {(isAdmin || isOwner) && session.status !== 'cancelled' && (
-                <button className="btn btn-outline-secondary" onClick={handleCancel}>
+
+              {/* Admin delete button */}
+              {isAdmin && (
+                <button
+                  className="btn btn-danger me-2"
+                  onClick={handleDelete}
+                  title="Permanently delete this session from the database"
+                >
+                  <i className="fas fa-trash-alt me-1"></i> Delete
+                </button>
+              )}
+
+              {(isAdmin || isOwner) && session.status !== "cancelled" && (
+                <button
+                  className="btn btn-outline-secondary"
+                  onClick={handleCancel}
+                >
                   <i className="fas fa-ban me-1"></i> Cancel Session
                 </button>
               )}
@@ -183,16 +244,26 @@ const SessionModal: React.FC<SessionModalProps> = ({ session, show, onClose }) =
 
       {/* Cancel confirmation dialog for recurring sessions */}
       {showCancelDialog && (
-        <div className="modal show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
+        <div
+          className="modal show d-block"
+          style={{ backgroundColor: "rgba(0,0,0,0.5)" }}
+        >
           <div className="modal-dialog modal-dialog-centered">
             <div className="modal-content">
               <div className="modal-header">
                 <h5 className="modal-title">Cancel Recurring Session</h5>
-                <button type="button" className="btn-close" onClick={() => setShowCancelDialog(false)}></button>
+                <button
+                  type="button"
+                  className="btn-close"
+                  onClick={() => setShowCancelDialog(false)}
+                ></button>
               </div>
               <div className="modal-body">
-                <p>This is part of a recurring session. What would you like to cancel?</p>
-                
+                <p>
+                  This is part of a recurring session. What would you like to
+                  cancel?
+                </p>
+
                 <div className="form-check mb-3">
                   <input
                     className="form-check-input"
@@ -206,7 +277,7 @@ const SessionModal: React.FC<SessionModalProps> = ({ session, show, onClose }) =
                     Cancel only this occurrence
                   </label>
                 </div>
-                
+
                 <div className="form-check">
                   <input
                     className="form-check-input"
@@ -222,19 +293,96 @@ const SessionModal: React.FC<SessionModalProps> = ({ session, show, onClose }) =
                 </div>
               </div>
               <div className="modal-footer">
-                <button 
-                  type="button" 
-                  className="btn btn-secondary" 
+                <button
+                  type="button"
+                  className="btn btn-secondary"
                   onClick={() => setShowCancelDialog(false)}
                 >
                   Back
                 </button>
-                <button 
-                  type="button" 
-                  className="btn btn-danger" 
+                <button
+                  type="button"
+                  className="btn btn-danger"
                   onClick={() => performCancel(cancelFutureSessions)}
                 >
                   Confirm Cancellation
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete confirmation dialog for administrators */}
+      {showDeleteDialog && (
+        <div
+          className="modal show d-block"
+          style={{ backgroundColor: "rgba(0,0,0,0.5)" }}
+        >
+          <div className="modal-dialog modal-dialog-centered">
+            <div className="modal-content">
+              <div className="modal-header">
+                <h5 className="modal-title">Delete Session</h5>
+                <button
+                  type="button"
+                  className="btn-close"
+                  onClick={() => setShowDeleteDialog(false)}
+                ></button>
+              </div>
+              <div className="modal-body">
+                <div className="alert alert-danger">
+                  <i className="fas fa-exclamation-triangle me-2"></i>
+                  Warning: This will permanently delete the session from the
+                  database and cannot be undone.
+                </div>
+
+                <p>
+                  This is part of a recurring session. What would you like to
+                  delete?
+                </p>
+
+                <div className="form-check mb-3">
+                  <input
+                    className="form-check-input"
+                    type="radio"
+                    name="deleteOption"
+                    id="deleteThis"
+                    checked={!deleteAllRelated}
+                    onChange={() => setDeleteAllRelated(false)}
+                  />
+                  <label className="form-check-label" htmlFor="deleteThis">
+                    Delete only this occurrence
+                  </label>
+                </div>
+
+                <div className="form-check">
+                  <input
+                    className="form-check-input"
+                    type="radio"
+                    name="deleteOption"
+                    id="deleteAll"
+                    checked={deleteAllRelated}
+                    onChange={() => setDeleteAllRelated(true)}
+                  />
+                  <label className="form-check-label" htmlFor="deleteAll">
+                    Delete all related sessions (parent and all occurrences)
+                  </label>
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => setShowDeleteDialog(false)}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-danger"
+                  onClick={() => performDelete(deleteAllRelated)}
+                >
+                  Confirm Deletion
                 </button>
               </div>
             </div>
