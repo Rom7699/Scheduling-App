@@ -1,26 +1,29 @@
 // client/src/components/Calendar/CreateSessionModal.tsx
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import moment from 'moment';
 import { useSession } from '../../context/SessionContext';
+import { useAuth } from '../../context/AuthContext';
 
 interface CreateSessionModalProps {
   show: boolean;
   onClose: () => void;
   startTime: Date;
-  endTime: Date;
 }
 
 const CreateSessionModal: React.FC<CreateSessionModalProps> = ({
   show,
   onClose,
-  startTime,
-  endTime
+  startTime
 }) => {
   const { createSession } = useSession();
-  const [title, setTitle] = useState('');
+  const { user } = useAuth();
   const [description, setDescription] = useState('');
-  const [start, setStart] = useState(moment(startTime).format('YYYY-MM-DDTHH:mm'));
-  const [end, setEnd] = useState(moment(endTime).format('YYYY-MM-DDTHH:mm'));
+  
+  // Selected date (YYYY-MM-DD)
+  const [selectedDate, setSelectedDate] = useState(moment(startTime).format('YYYY-MM-DD'));
+  
+  // Selected time (HH:MM)
+  const [selectedTime, setSelectedTime] = useState(moment(startTime).format('HH:mm'));
   
   // New state for recurring options
   const [isRecurring, setIsRecurring] = useState(false);
@@ -33,29 +36,76 @@ const CreateSessionModal: React.FC<CreateSessionModalProps> = ({
     moment(defaultEndDate).format('YYYY-MM-DD')
   );
 
+  // Generate time options in 15-minute intervals from 7:00 to 21:00
+  const generateTimeOptions = () => {
+    const options = [];
+    for (let hour = 7; hour < 21; hour++) { // 7 AM to 8 PM (last slot is 8 PM)
+      for (let minute = 0; minute < 60; minute += 15) {
+        const formattedHour = hour.toString().padStart(2, '0');
+        const formattedMinute = minute.toString().padStart(2, '0');
+        const timeValue = `${formattedHour}:${formattedMinute}`;
+        options.push(timeValue);
+      }
+    }
+    return options;
+  };
+
+  // Generate automatic title based on time of day and user name
+  const generateTitle = () => {
+    const hour = parseInt(selectedTime.split(':')[0], 10);
+    let timeOfDay;
+    
+    if (hour >= 5 && hour < 12) {
+      timeOfDay = "Morning";
+    } else if (hour >= 12 && hour < 17) {
+      timeOfDay = "Afternoon";
+    } else {
+      timeOfDay = "Evening";
+    }
+    
+    return `${user?.name || 'User'} - ${timeOfDay} Session`;
+  };
+
+  // Round initial time to the nearest 15 minutes
+  useEffect(() => {
+    const date = moment(startTime);
+    const minutes = date.minutes();
+    const remainder = minutes % 15;
+    
+    if (remainder > 0) {
+      // Round up to next 15-min interval
+      date.add(15 - remainder, 'minutes');
+    }
+    
+    setSelectedDate(date.format('YYYY-MM-DD'));
+    setSelectedTime(date.format('HH:mm'));
+  }, [startTime]);
+
   if (!show) {
     return null;
   }
 
+  const timeOptions = generateTimeOptions();
+  const sessionTitle = useMemo(() => {
+    return generateTitle();
+  }, [selectedTime, user?.name]); // Re-compute when time or user changes
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
-    const startDate = new Date(start);
-    const endDate = new Date(end);
+    // Create start date from selected date and time
+    const startDateTime = moment(`${selectedDate} ${selectedTime}`, 'YYYY-MM-DD HH:mm').toDate();
     
-    // Validate dates
-    if (endDate <= startDate) {
-      alert('End time must be after start time');
-      return;
-    }
+    // End time is always exactly 1 hour after start time
+    const endDateTime = moment(startDateTime).add(1, 'hour').toDate();
     
     // Validate current/next month restriction for non-recurring sessions
     const now = new Date();
     const startOfCurrentMonth = new Date(now.getFullYear(), now.getMonth(), 1);
     const endOfNextMonth = new Date(now.getFullYear(), now.getMonth() + 2, 0, 23, 59, 59);
     
-    if (startDate < startOfCurrentMonth || 
-        (!isRecurring && startDate > endOfNextMonth)) {
+    if (startDateTime < startOfCurrentMonth || 
+        (!isRecurring && startDateTime > endOfNextMonth)) {
       alert('Sessions can only be scheduled for the current or next month');
       return;
     }
@@ -63,7 +113,7 @@ const CreateSessionModal: React.FC<CreateSessionModalProps> = ({
     // Validate recurrence end date for recurring sessions
     if (isRecurring) {
       const recurrenceEnd = new Date(recurrenceEndDate);
-      if (recurrenceEnd <= startDate) {
+      if (recurrenceEnd <= startDateTime) {
         alert('Recurrence end date must be after the session start date');
         return;
       }
@@ -79,10 +129,10 @@ const CreateSessionModal: React.FC<CreateSessionModalProps> = ({
     }
     
     const sessionData = {
-      title,
+      title: sessionTitle, // Use the automatically generated title
       description,
-      startTime: startDate,
-      endTime: endDate,
+      startTime: startDateTime,
+      endTime: endDateTime,
       ...(isRecurring && {
         isRecurring,
         recurrenceType,
@@ -105,16 +155,11 @@ const CreateSessionModal: React.FC<CreateSessionModalProps> = ({
           <div className="modal-body">
             <form onSubmit={handleSubmit}>
               <div className="mb-3">
-                <label htmlFor="title" className="form-label">Title</label>
-                <input
-                  type="text"
-                  className="form-control"
-                  id="title"
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  required
-                />
+                <label className="form-label">Session Title</label>
+                <div className="form-control bg-light">{sessionTitle}</div>
+                <small className="text-muted">Title is automatically generated based on time of day</small>
               </div>
+              
               <div className="mb-3">
                 <label htmlFor="description" className="form-label">Description</label>
                 <textarea
@@ -123,29 +168,47 @@ const CreateSessionModal: React.FC<CreateSessionModalProps> = ({
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                   rows={3}
+                  placeholder="Add any details about your session here..."
                 ></textarea>
               </div>
+              
               <div className="mb-3">
-                <label htmlFor="startTime" className="form-label">Start Time</label>
+                <label htmlFor="selectedDate" className="form-label">Date</label>
                 <input
-                  type="datetime-local"
+                  type="date"
                   className="form-control"
-                  id="startTime"
-                  value={start}
-                  onChange={(e) => setStart(e.target.value)}
+                  id="selectedDate"
+                  value={selectedDate}
+                  onChange={(e) => setSelectedDate(e.target.value)}
                   required
                 />
               </div>
+              
               <div className="mb-3">
-                <label htmlFor="endTime" className="form-label">End Time</label>
-                <input
-                  type="datetime-local"
-                  className="form-control"
-                  id="endTime"
-                  value={end}
-                  onChange={(e) => setEnd(e.target.value)}
+                <label htmlFor="selectedTime" className="form-label">Start Time</label>
+                <select
+                  className="form-select"
+                  id="selectedTime"
+                  value={selectedTime}
+                  onChange={(e) => setSelectedTime(e.target.value)}
                   required
-                />
+                >
+                  {timeOptions.map(time => (
+                    <option key={time} value={time}>
+                      {moment(time, 'HH:mm').format('h:mm A')}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              
+              <div className="mb-3">
+                <div className="alert alert-info">
+                  <strong>Session Duration: 1 hour</strong><br/>
+                  Your session will be from{' '}
+                  {moment(`${selectedDate} ${selectedTime}`, 'YYYY-MM-DD HH:mm').format('h:mm A')}{' '}
+                  to{' '}
+                  {moment(`${selectedDate} ${selectedTime}`, 'YYYY-MM-DD HH:mm').add(1, 'hour').format('h:mm A')}
+                </div>
               </div>
               
               {/* Recurring session options */}
