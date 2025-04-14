@@ -21,6 +21,17 @@ const CreateSessionModal: React.FC<CreateSessionModalProps> = ({
   const [description, setDescription] = useState('');
   const [start, setStart] = useState(moment(startTime).format('YYYY-MM-DDTHH:mm'));
   const [end, setEnd] = useState(moment(endTime).format('YYYY-MM-DDTHH:mm'));
+  
+  // New state for recurring options
+  const [isRecurring, setIsRecurring] = useState(false);
+  const [recurrenceType, setRecurrenceType] = useState<'weekly' | 'biweekly' | 'monthly'>('weekly');
+  
+  // Calculate default recurrence end date (3 months from now)
+  const defaultEndDate = new Date();
+  defaultEndDate.setMonth(defaultEndDate.getMonth() + 3);
+  const [recurrenceEndDate, setRecurrenceEndDate] = useState(
+    moment(defaultEndDate).format('YYYY-MM-DD')
+  );
 
   if (!show) {
     return null;
@@ -38,23 +49,48 @@ const CreateSessionModal: React.FC<CreateSessionModalProps> = ({
       return;
     }
     
-    // Validate current/next month restriction
+    // Validate current/next month restriction for non-recurring sessions
     const now = new Date();
     const startOfCurrentMonth = new Date(now.getFullYear(), now.getMonth(), 1);
     const endOfNextMonth = new Date(now.getFullYear(), now.getMonth() + 2, 0, 23, 59, 59);
     
-    if (startDate < startOfCurrentMonth || startDate > endOfNextMonth) {
+    if (startDate < startOfCurrentMonth || 
+        (!isRecurring && startDate > endOfNextMonth)) {
       alert('Sessions can only be scheduled for the current or next month');
       return;
     }
     
-    createSession({
+    // Validate recurrence end date for recurring sessions
+    if (isRecurring) {
+      const recurrenceEnd = new Date(recurrenceEndDate);
+      if (recurrenceEnd <= startDate) {
+        alert('Recurrence end date must be after the session start date');
+        return;
+      }
+      
+      // Limit recurring events to one year in the future
+      const oneYearFromNow = new Date();
+      oneYearFromNow.setFullYear(oneYearFromNow.getFullYear() + 1);
+      
+      if (recurrenceEnd > oneYearFromNow) {
+        alert('Recurring sessions cannot be scheduled more than one year in advance');
+        return;
+      }
+    }
+    
+    const sessionData = {
       title,
       description,
       startTime: startDate,
-      endTime: endDate
-    });
+      endTime: endDate,
+      ...(isRecurring && {
+        isRecurring,
+        recurrenceType,
+        recurrenceEndDate: new Date(`${recurrenceEndDate}T23:59:59`)
+      })
+    };
     
+    createSession(sessionData);
     onClose();
   };
 
@@ -111,15 +147,74 @@ const CreateSessionModal: React.FC<CreateSessionModalProps> = ({
                   required
                 />
               </div>
+              
+              {/* Recurring session options */}
+              <div className="mb-3 form-check">
+                <input
+                  type="checkbox"
+                  className="form-check-input"
+                  id="isRecurring"
+                  checked={isRecurring}
+                  onChange={(e) => setIsRecurring(e.target.checked)}
+                />
+                <label className="form-check-label" htmlFor="isRecurring">
+                  Make this a recurring session
+                </label>
+              </div>
+              
+              {isRecurring && (
+                <>
+                  <div className="mb-3">
+                    <label htmlFor="recurrenceType" className="form-label">
+                      Repeats
+                    </label>
+                    <select
+                      className="form-select"
+                      id="recurrenceType"
+                      value={recurrenceType}
+                      onChange={(e) => setRecurrenceType(e.target.value as 'weekly' | 'biweekly' | 'monthly')}
+                    >
+                      <option value="weekly">Weekly</option>
+                      <option value="biweekly">Every Two Weeks</option>
+                      <option value="monthly">Monthly</option>
+                    </select>
+                  </div>
+                  <div className="mb-3">
+                    <label htmlFor="recurrenceEndDate" className="form-label">
+                      Ends On
+                    </label>
+                    <input
+                      type="date"
+                      className="form-control"
+                      id="recurrenceEndDate"
+                      value={recurrenceEndDate}
+                      onChange={(e) => setRecurrenceEndDate(e.target.value)}
+                      required={isRecurring}
+                    />
+                  </div>
+                </>
+              )}
+              
               <div className="alert alert-info">
                 Note: Sessions require admin approval before they are confirmed.
+                {isRecurring && (
+                  <span className="d-block mt-2">
+                    This will create multiple sessions that repeat{' '}
+                    {recurrenceType === 'weekly' 
+                      ? 'every week' 
+                      : recurrenceType === 'biweekly' 
+                        ? 'every two weeks' 
+                        : 'every month'}{' '}
+                    until {moment(recurrenceEndDate).format('MMMM D, YYYY')}.
+                  </span>
+                )}
               </div>
               <div className="modal-footer">
                 <button type="button" className="btn btn-secondary" onClick={onClose}>
                   Cancel
                 </button>
                 <button type="submit" className="btn btn-primary">
-                  Request Session
+                  {isRecurring ? 'Request Recurring Sessions' : 'Request Session'}
                 </button>
               </div>
             </form>

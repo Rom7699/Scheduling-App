@@ -9,6 +9,11 @@ export interface ISession extends Document {
   user: mongoose.Types.ObjectId;
   status: 'pending' | 'approved' | 'rejected' | 'cancelled';
   createdAt: Date;
+  // New recurrence fields
+  isRecurring: boolean;
+  recurrenceType: 'weekly' | 'biweekly' | 'monthly' | null;
+  recurrenceEndDate: Date | null;
+  parentSessionId: mongoose.Types.ObjectId | null; // Links child sessions to their parent
 }
 
 const SessionSchema: Schema = new Schema({
@@ -44,6 +49,25 @@ const SessionSchema: Schema = new Schema({
   createdAt: {
     type: Date,
     default: Date.now
+  },
+  // New recurrence fields
+  isRecurring: {
+    type: Boolean,
+    default: false
+  },
+  recurrenceType: {
+    type: String,
+    enum: ['weekly', 'biweekly', 'monthly', null],
+    default: null
+  },
+  recurrenceEndDate: {
+    type: Date,
+    default: null
+  },
+  parentSessionId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Session',
+    default: null
   }
 });
 
@@ -54,12 +78,29 @@ SessionSchema.pre('save', function(this: ISession, next) {
   }
   
   // Validate that session is in current or next month only
+  // We'll modify this validation for recurring events
   const now = new Date();
   const startOfCurrentMonth = new Date(now.getFullYear(), now.getMonth(), 1);
   const endOfNextMonth = new Date(now.getFullYear(), now.getMonth() + 2, 0, 23, 59, 59);
   
-  if (this.startTime < startOfCurrentMonth || this.startTime > endOfNextMonth) {
+  if (this.startTime < startOfCurrentMonth || 
+      (!this.isRecurring && this.startTime > endOfNextMonth)) {
     throw new Error('Sessions can only be scheduled for the current or next month');
+  }
+  
+  // For recurring events, validate that recurrenceEndDate is after startTime and within a reasonable timeframe
+  if (this.isRecurring && this.recurrenceEndDate) {
+    if (this.recurrenceEndDate <= this.startTime) {
+      throw new Error('Recurrence end date must be after the start time');
+    }
+    
+    // Limit recurring events to one year in the future
+    const oneYearFromNow = new Date();
+    oneYearFromNow.setFullYear(oneYearFromNow.getFullYear() + 1);
+    
+    if (this.recurrenceEndDate > oneYearFromNow) {
+      throw new Error('Recurring events cannot be scheduled more than one year in advance');
+    }
   }
   
   next();

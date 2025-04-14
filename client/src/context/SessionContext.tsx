@@ -9,10 +9,10 @@ interface SessionContextType extends SessionState {
   getSessionById: (id: string) => Promise<void>;
   createSession: (sessionData: Partial<Session>) => Promise<void>;
   updateSessionStatus: (id: string, status: Session['status']) => Promise<void>;
-  cancelSession: (id: string) => Promise<void>;
-  getCalendarMonth: (year: number, month: number) => Promise<void>;
-  getCalendarWeek: (year: number, week: number) => Promise<void>;
-  getCalendarDay: (year: number, month: number, day: number) => Promise<void>;
+  cancelSession: (id: string, cancelFutureSessions?: boolean) => Promise<void>;
+  getCalendarMonth: (year: number, month: number, includeCancelled?: boolean) => Promise<void>;
+  getCalendarWeek: (year: number, week: number, includeCancelled?: boolean) => Promise<void>;
+  getCalendarDay: (year: number, month: number, day: number, includeCancelled?: boolean) => Promise<void>;
   clearSessionErrors: () => void;
 }
 
@@ -130,7 +130,8 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
         ...session,
         startTime: new Date(session.startTime),
         endTime: new Date(session.endTime),
-        createdAt: new Date(session.createdAt)
+        createdAt: new Date(session.createdAt),
+        recurrenceEndDate: session.recurrenceEndDate ? new Date(session.recurrenceEndDate) : null
       }));
       
       dispatch({
@@ -145,7 +146,7 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
   };
 
-  // Other methods remain the same...
+  // Get a session by ID
   const getSessionById = async (id: string) => {
     setAuthToken();
     dispatch({ type: 'SET_LOADING' });
@@ -157,7 +158,8 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
         ...res.data.session,
         startTime: new Date(res.data.session.startTime),
         endTime: new Date(res.data.session.endTime),
-        createdAt: new Date(res.data.session.createdAt)
+        createdAt: new Date(res.data.session.createdAt),
+        recurrenceEndDate: res.data.session.recurrenceEndDate ? new Date(res.data.session.recurrenceEndDate) : null
       };
       
       dispatch({
@@ -184,13 +186,19 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
         ...res.data.session,
         startTime: new Date(res.data.session.startTime),
         endTime: new Date(res.data.session.endTime),
-        createdAt: new Date(res.data.session.createdAt)
+        createdAt: new Date(res.data.session.createdAt),
+        recurrenceEndDate: res.data.session.recurrenceEndDate ? new Date(res.data.session.recurrenceEndDate) : null
       };
       
       dispatch({
         type: 'CREATE_SESSION',
         payload: session
       });
+      
+      // Automatically refresh the sessions list to get all recurring instances
+      if (session.isRecurring) {
+        getSessions();
+      }
     } catch (err: any) {
       dispatch({
         type: 'SESSION_ERROR',
@@ -211,7 +219,8 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
         ...res.data.session,
         startTime: new Date(res.data.session.startTime),
         endTime: new Date(res.data.session.endTime),
-        createdAt: new Date(res.data.session.createdAt)
+        createdAt: new Date(res.data.session.createdAt),
+        recurrenceEndDate: res.data.session.recurrenceEndDate ? new Date(res.data.session.recurrenceEndDate) : null
       };
       
       dispatch({
@@ -226,25 +235,33 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
   };
 
-  // Cancel session
-  const cancelSession = async (id: string) => {
+  // Cancel session with option to cancel future occurrences
+  const cancelSession = async (id: string, cancelFutureSessions = false) => {
     setAuthToken();
     dispatch({ type: 'SET_LOADING' });
     try {
-      const res = await axios.delete(`/api/sessions/${id}`);
+      const res = await axios.delete(`/api/sessions/${id}`, {
+        data: { cancelFutureSessions }
+      });
       
       // Convert date strings to Date objects
       const session = {
         ...res.data.session,
         startTime: new Date(res.data.session.startTime),
         endTime: new Date(res.data.session.endTime),
-        createdAt: new Date(res.data.session.createdAt)
+        createdAt: new Date(res.data.session.createdAt),
+        recurrenceEndDate: res.data.session.recurrenceEndDate ? new Date(res.data.session.recurrenceEndDate) : null
       };
       
       dispatch({
         type: 'CANCEL_SESSION',
         payload: session
       });
+      
+      // If cancelling future occurrences, refresh sessions to update the UI
+      if (cancelFutureSessions) {
+        getSessions();
+      }
     } catch (err: any) {
       dispatch({
         type: 'SESSION_ERROR',
@@ -253,19 +270,22 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
   };
 
-  // Get sessions for a specific month
-  const getCalendarMonth = async (year: number, month: number) => {
+  // Get sessions for a specific month with option to include cancelled sessions
+  const getCalendarMonth = async (year: number, month: number, includeCancelled = false) => {
     setAuthToken();
     dispatch({ type: 'SET_LOADING' });
     try {
-      const res = await axios.get(`/api/sessions/calendar/month/${year}/${month}`);
+      const res = await axios.get(`/api/sessions/calendar/month/${year}/${month}`, {
+        params: { includeCancelled }
+      });
       
       // Convert date strings to Date objects
       const sessions = res.data.sessions.map((session: any) => ({
         ...session,
         startTime: new Date(session.startTime),
         endTime: new Date(session.endTime),
-        createdAt: new Date(session.createdAt)
+        createdAt: new Date(session.createdAt),
+        recurrenceEndDate: session.recurrenceEndDate ? new Date(session.recurrenceEndDate) : null
       }));
       
       dispatch({
@@ -280,19 +300,22 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
   };
 
-  // Get sessions for a specific week
-  const getCalendarWeek = async (year: number, week: number) => {
+  // Get sessions for a specific week with option to include cancelled sessions
+  const getCalendarWeek = async (year: number, week: number, includeCancelled = false) => {
     setAuthToken();
     dispatch({ type: 'SET_LOADING' });
     try {
-      const res = await axios.get(`/api/sessions/calendar/week/${year}/${week}`);
+      const res = await axios.get(`/api/sessions/calendar/week/${year}/${week}`, {
+        params: { includeCancelled }
+      });
       
       // Convert date strings to Date objects
       const sessions = res.data.sessions.map((session: any) => ({
         ...session,
         startTime: new Date(session.startTime),
         endTime: new Date(session.endTime),
-        createdAt: new Date(session.createdAt)
+        createdAt: new Date(session.createdAt),
+        recurrenceEndDate: session.recurrenceEndDate ? new Date(session.recurrenceEndDate) : null
       }));
       
       dispatch({
@@ -307,19 +330,22 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
   };
 
-  // Get sessions for a specific day
-  const getCalendarDay = async (year: number, month: number, day: number) => {
+  // Get sessions for a specific day with option to include cancelled sessions
+  const getCalendarDay = async (year: number, month: number, day: number, includeCancelled = false) => {
     setAuthToken();
     dispatch({ type: 'SET_LOADING' });
     try {
-      const res = await axios.get(`/api/sessions/calendar/day/${year}/${month}/${day}`);
+      const res = await axios.get(`/api/sessions/calendar/day/${year}/${month}/${day}`, {
+        params: { includeCancelled }
+      });
       
       // Convert date strings to Date objects
       const sessions = res.data.sessions.map((session: any) => ({
         ...session,
         startTime: new Date(session.startTime),
         endTime: new Date(session.endTime),
-        createdAt: new Date(session.createdAt)
+        createdAt: new Date(session.createdAt),
+        recurrenceEndDate: session.recurrenceEndDate ? new Date(session.recurrenceEndDate) : null
       }));
       
       dispatch({
