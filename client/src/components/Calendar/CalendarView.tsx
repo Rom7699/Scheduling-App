@@ -369,7 +369,6 @@ const CalendarView: React.FC = () => {
             setSelectedSlot(null);
           }}
           startTime={selectedSlot.start}
-          endTime={selectedSlot.end}
         />
       )}
     </div>
