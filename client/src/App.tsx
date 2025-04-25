@@ -13,10 +13,12 @@ import AdminPage from './pages/AdminPage';
 import axios from 'axios';
 import './index.css';
 
-// Set base URL for API requests
-// With Vite, use import.meta.env instead of process.env
-axios.defaults.baseURL = import.meta.env.VITE_API_URL || 'https://scheduling-app-server.onrender.com';
-console.log('API URL:', axios.defaults.baseURL);
+const apiUrl = import.meta.env.MODE === 'production'
+  ? import.meta.env.VITE_API_PRODUCTION_URL
+  : import.meta.env.VITE_API_DEVELOPMENT_URL;
+
+axios.defaults.baseURL = apiUrl || 'http://localhost:5500';
+console.log(`Running in ${import.meta.env.MODE} mode with API URL: ${axios.defaults.baseURL}`);
 
 const App: React.FC = () => {
   return (
