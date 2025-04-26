@@ -4,6 +4,7 @@ import moment from "moment";
 import { Session } from "../../types";
 import { useSession } from "../../context/SessionContext";
 import { useAuth } from "../../context/AuthContext";
+import EditSessionModal from "./EditSessionModal";
 
 interface SessionModalProps {
   session: Session;
@@ -17,22 +18,28 @@ const SessionModal: React.FC<SessionModalProps> = ({
   onClose,
 }) => {
   const { updateSessionStatus, cancelSession, deleteSession } = useSession();
+
   const { user } = useAuth();
-  
+
   // State for dialogs
   const [showCancelDialog, setShowCancelDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [showReasonDialog, setShowReasonDialog] = useState(false);
-  
+
   // State for options
   const [cancelFutureSessions, setCancelFutureSessions] = useState(false);
   const [deleteAllRelated, setDeleteAllRelated] = useState(false);
-  
+
   // State for reason input
   const [reason, setReason] = useState("");
-  
+
   // State to track current action type
-  const [currentAction, setCurrentAction] = useState<"approve" | "reject" | "cancel" | "delete" | null>(null);
+  const [currentAction, setCurrentAction] = useState<
+    "approve" | "reject" | "cancel" | "delete" | null
+  >(null);
+
+  // State for edit modal
+  const [showEditModal, setShowEditModal] = useState(false);
 
   const isAdmin = user?.isAdmin;
   const isOwner =
@@ -107,12 +114,12 @@ const SessionModal: React.FC<SessionModalProps> = ({
         deleteSession(session._id, deleteAllRelated, reason);
         break;
     }
-    
+
     // Close all dialogs
     setShowReasonDialog(false);
     setShowCancelDialog(false);
     setShowDeleteDialog(false);
-    
+
     // Close the main modal
     onClose();
   };
@@ -141,6 +148,29 @@ const SessionModal: React.FC<SessionModalProps> = ({
         ? moment(session.recurrenceEndDate).format("MMMM D, YYYY")
         : "N/A"
     }`;
+  };
+
+  const canEditSession = () => {
+    // Only the session owner can edit
+    const isOwner =
+      typeof session.user !== "string" && user?.id === session.user.id;
+
+    // Only pending or approved sessions can be edited
+    const hasEditableStatus =
+      session.status === "pending" || session.status === "approved";
+
+    // Check time constraint - 12 hours before start
+    const now = new Date();
+    console.log("Current time:", now);
+    console.log("Session start time:", session.startTime, typeof session.startTime.getDate);
+    const sessionStart = new Date(session.startTime);
+    const diffHours =
+      (sessionStart.getTime() - now.getTime()) / (1000 * 60 * 60);
+      console.log("Difference in hours:", diffHours);
+    const hasEnoughTimeBeforeStart = diffHours >= 12;
+    console.log("Has enough time before start:", hasEnoughTimeBeforeStart);
+
+    return hasEditableStatus && hasEnoughTimeBeforeStart;
   };
 
   // Render the main session modal
@@ -257,6 +287,14 @@ const SessionModal: React.FC<SessionModalProps> = ({
                   onClick={startCancel}
                 >
                   <i className="fas fa-ban me-1"></i> Cancel Session
+                </button>
+              )}
+              {canEditSession() && (
+                <button
+                  className="btn btn-outline-primary me-2"
+                  onClick={() => setShowEditModal(true)}
+                >
+                  <i className="fas fa-clock me-1"></i> Reschedule
                 </button>
               )}
               <button className="btn btn-secondary" onClick={onClose}>
@@ -443,8 +481,8 @@ const SessionModal: React.FC<SessionModalProps> = ({
               </div>
               <div className="modal-body">
                 <p>
-                  Please provide a reason that will be included in the email notification 
-                  to the user:
+                  Please provide a reason that will be included in the email
+                  notification to the user:
                 </p>
 
                 <div className="form-group">
@@ -478,6 +516,17 @@ const SessionModal: React.FC<SessionModalProps> = ({
             </div>
           </div>
         </div>
+      )}
+      {/* Edit Session modal */}
+      {showEditModal && (
+        <EditSessionModal
+          session={session}
+          show={showEditModal}
+          onClose={() => {
+            setShowEditModal(false);
+            onClose(); // Close the main modal too, to refresh data
+          }}
+        />
       )}
     </>
   );

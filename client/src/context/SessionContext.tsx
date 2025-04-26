@@ -18,6 +18,11 @@ interface SessionContextType extends SessionState {
     status: Session["status"],
     reason?: string
   ) => Promise<void>;
+  updateSessionTime: (
+    id: string,
+    startTime: Date,
+    endTime: Date
+  ) => Promise<void>;
   cancelSession: (
     id: string,
     cancelFutureSessions?: boolean,
@@ -62,6 +67,7 @@ const SessionContext = createContext<SessionContextType>({
   getSessionById: async () => {},
   createSession: async () => {},
   updateSessionStatus: async () => {},
+  updateSessionTime: async () => {},
   cancelSession: async () => {},
   getCalendarMonth: async () => {},
   deleteSession: async () => {}, // New method
@@ -299,6 +305,46 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   };
 
+  // Update session time (can only be done by the session owner)
+  const updateSessionTime = async (
+    id: string,
+    startTime: Date,
+    endTime: Date
+  ) => {
+    setAuthToken();
+    dispatch({ type: "SET_LOADING" });
+    try {
+      const res = await axios.put(`/api/sessions/${id}/reschedule`, {
+        startTime,
+        endTime,
+      });
+
+      // Convert date strings to Date objects
+      const session = {
+        ...res.data.session,
+        startTime: new Date(res.data.session.startTime),
+        endTime: new Date(res.data.session.endTime),
+        createdAt: new Date(res.data.session.createdAt),
+        recurrenceEndDate: res.data.session.recurrenceEndDate
+          ? new Date(res.data.session.recurrenceEndDate)
+          : null,
+      };
+
+      dispatch({
+        type: "UPDATE_SESSION",
+        payload: session,
+      });
+
+      return res.data.session;
+    } catch (err: any) {
+      dispatch({
+        type: "SESSION_ERROR",
+        payload: err.response?.data?.message || "Error updating session time",
+      });
+      throw err; // Rethrow for component handling
+    }
+  };
+
   // Cancel session with option for reason
   const cancelSession = async (
     id: string,
@@ -520,9 +566,10 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({
         getSessionById,
         createSession,
         updateSessionStatus,
+        updateSessionTime, // Add the new method
         cancelSession,
         getCalendarMonth,
-        deleteSession, // New method
+        deleteSession, 
         getCalendarWeek,
         getCalendarDay,
         clearSessionErrors,
