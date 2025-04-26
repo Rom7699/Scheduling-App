@@ -1,7 +1,8 @@
-// server/src/controllers/sessionController.ts
 import { Request, Response } from "express";
 import Session from "../models/Session";
+import User from "../models/User";
 import mongoose from "mongoose";
+import { sendSessionStatusEmail } from "../services/emailService";
 
 export const createSession = async (req: Request, res: Response) => {
   try {
@@ -175,7 +176,7 @@ export const getSessionById = async (req: Request, res: Response) => {
 
 export const updateSessionStatus = async (req: Request, res: Response) => {
   try {
-    const { status } = req.body;
+    const { status, reason } = req.body;
 
     if (!["pending", "approved", "rejected", "cancelled"].includes(status)) {
       return res.status(400).json({ message: "Invalid status" });
@@ -187,8 +188,33 @@ export const updateSessionStatus = async (req: Request, res: Response) => {
       return res.status(404).json({ message: "Session not found" });
     }
 
+    // Update session fields (we don't store the reason)
     session.status = status;
+    session.statusUpdatedAt = new Date();
+    session.statusUpdatedBy = req.user?._id;
+    
     await session.save();
+
+    // Send email notification to the user about the status change
+    try {
+      // Get the user's email
+      const userDoc = await User.findById(session.user);
+      
+      if (userDoc && userDoc.email) {
+        // Send the status update email (include reason in email only)
+        await sendSessionStatusEmail(
+          userDoc.email,
+          userDoc.name,
+          session.title,
+          status as 'approved' | 'rejected' | 'cancelled',
+          session.startTime,
+          reason // Pass the reason to the email but don't store it
+        );
+      }
+    } catch (emailError) {
+      console.error('Error sending email notification:', emailError);
+      // Don't fail the request if email sending fails
+    }
 
     res.status(200).json({
       success: true,
@@ -201,7 +227,7 @@ export const updateSessionStatus = async (req: Request, res: Response) => {
 
 export const cancelSession = async (req: Request, res: Response) => {
   try {
-    const { cancelFutureSessions } = req.body;
+    const { cancelFutureSessions, reason } = req.body;
     const session = await Session.findById(req.params.id);
 
     if (!session) {
@@ -218,8 +244,11 @@ export const cancelSession = async (req: Request, res: Response) => {
         .json({ message: "Not authorized to cancel this session" });
     }
 
-    // Cancel the current session
+    // Cancel the current session (without storing reason)
     session.status = "cancelled";
+    session.statusUpdatedAt = new Date();
+    session.statusUpdatedBy = req.user?._id;
+    
     await session.save();
 
     // If this is a recurring session and user wants to cancel future occurrences
@@ -232,15 +261,44 @@ export const cancelSession = async (req: Request, res: Response) => {
             parentSessionId: session.parentSessionId,
             startTime: { $gte: currentDate },
           },
-          { status: "cancelled" }
+          { 
+            status: "cancelled",
+            statusUpdatedAt: new Date(),
+            statusUpdatedBy: req.user?._id
+          }
         );
       } else {
         // This is a parent session, cancel all its children
         await Session.updateMany(
           { parentSessionId: session._id },
-          { status: "cancelled" }
+          { 
+            status: "cancelled",
+            statusUpdatedAt: new Date(),
+            statusUpdatedBy: req.user?._id
+          }
         );
       }
+    }
+
+    // Send email notification to the user about the cancellation
+    try {
+      // Get the user's email
+      const userDoc = await User.findById(session.user);
+      
+      if (userDoc && userDoc.email) {
+        // Send the cancellation email (include reason in email only)
+        await sendSessionStatusEmail(
+          userDoc.email,
+          userDoc.name,
+          session.title,
+          'cancelled',
+          session.startTime,
+          reason // Pass reason to email but don't store it
+        );
+      }
+    } catch (emailError) {
+      console.error('Error sending email notification:', emailError);
+      // Don't fail the request if email sending fails
     }
 
     res.status(200).json({
@@ -252,10 +310,10 @@ export const cancelSession = async (req: Request, res: Response) => {
   }
 };
 
-// NEW METHOD: Permanently delete a session (admin only)
+// Permanently delete a session (admin only)
 export const deleteSession = async (req: Request, res: Response) => {
   try {
-    const { deleteAllRelated } = req.body;
+    const { deleteAllRelated, reason } = req.body;
     const session = await Session.findById(req.params.id);
 
     if (!session) {
@@ -268,6 +326,13 @@ export const deleteSession = async (req: Request, res: Response) => {
         .status(403)
         .json({ message: "Not authorized to delete sessions" });
     }
+
+    // Store session information for notification before deleting
+    const sessionInfo = {
+      title: session.title,
+      startTime: session.startTime,
+      userId: session.user
+    };
 
     // Delete the current session
     await Session.findByIdAndDelete(req.params.id);
@@ -283,6 +348,24 @@ export const deleteSession = async (req: Request, res: Response) => {
         // This is a parent session, delete all its children
         await Session.deleteMany({ parentSessionId: session._id });
       }
+    }
+
+    // Notify the user that their session has been deleted
+    try {
+      const userDoc = await User.findById(sessionInfo.userId);
+      
+      if (userDoc && userDoc.email) {
+        await sendSessionStatusEmail(
+          userDoc.email,
+          userDoc.name,
+          sessionInfo.title,
+          'cancelled', // Use cancelled status for deletion notification
+          sessionInfo.startTime,
+          reason || "This session has been permanently deleted by an administrator."
+        );
+      }
+    } catch (emailError) {
+      console.error('Error sending deletion notification:', emailError);
     }
 
     res.status(200).json({

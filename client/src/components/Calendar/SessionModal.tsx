@@ -18,10 +18,21 @@ const SessionModal: React.FC<SessionModalProps> = ({
 }) => {
   const { updateSessionStatus, cancelSession, deleteSession } = useSession();
   const { user } = useAuth();
+  
+  // State for dialogs
   const [showCancelDialog, setShowCancelDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [showReasonDialog, setShowReasonDialog] = useState(false);
+  
+  // State for options
   const [cancelFutureSessions, setCancelFutureSessions] = useState(false);
   const [deleteAllRelated, setDeleteAllRelated] = useState(false);
+  
+  // State for reason input
+  const [reason, setReason] = useState("");
+  
+  // State to track current action type
+  const [currentAction, setCurrentAction] = useState<"approve" | "reject" | "cancel" | "delete" | null>(null);
 
   const isAdmin = user?.isAdmin;
   const isOwner =
@@ -54,41 +65,55 @@ const SessionModal: React.FC<SessionModalProps> = ({
     onClose();
   };
 
-  // Handle reject
-  const handleReject = () => {
-    updateSessionStatus(session._id, "rejected");
-    onClose();
+  // Initialize reject process
+  const startReject = () => {
+    setCurrentAction("reject");
+    setReason("");
+    setShowReasonDialog(true);
   };
 
-  // Handle cancel
-  const handleCancel = () => {
+  // Initialize cancel process
+  const startCancel = () => {
+    setCurrentAction("cancel");
     if (isRecurring) {
       setShowCancelDialog(true);
     } else {
-      performCancel(false);
+      setReason("");
+      setShowReasonDialog(true);
     }
   };
 
-  // Perform the actual cancellation
-  const performCancel = (cancelFuture: boolean) => {
-    cancelSession(session._id, cancelFuture);
-    setShowCancelDialog(false);
-    onClose();
-  };
-
-  // Handle delete (admin only)
-  const handleDelete = () => {
+  // Initialize delete process
+  const startDelete = () => {
+    setCurrentAction("delete");
     if (isRecurring) {
       setShowDeleteDialog(true);
     } else {
-      performDelete(false);
+      setReason("");
+      setShowReasonDialog(true);
     }
   };
 
-  // Perform the actual deletion
-  const performDelete = (deleteAll: boolean) => {
-    deleteSession(session._id, deleteAll);
+  // Submit the current action with reason
+  const submitActionWithReason = () => {
+    switch (currentAction) {
+      case "reject":
+        updateSessionStatus(session._id, "rejected", reason);
+        break;
+      case "cancel":
+        cancelSession(session._id, cancelFutureSessions, reason);
+        break;
+      case "delete":
+        deleteSession(session._id, deleteAllRelated, reason);
+        break;
+    }
+    
+    // Close all dialogs
+    setShowReasonDialog(false);
+    setShowCancelDialog(false);
     setShowDeleteDialog(false);
+    
+    // Close the main modal
     onClose();
   };
 
@@ -209,7 +234,7 @@ const SessionModal: React.FC<SessionModalProps> = ({
                   >
                     <i className="fas fa-check me-1"></i> Approve
                   </button>
-                  <button className="btn btn-danger" onClick={handleReject}>
+                  <button className="btn btn-danger" onClick={startReject}>
                     <i className="fas fa-times me-1"></i> Reject
                   </button>
                 </div>
@@ -219,7 +244,7 @@ const SessionModal: React.FC<SessionModalProps> = ({
               {isAdmin && (
                 <button
                   className="btn btn-danger me-2"
-                  onClick={handleDelete}
+                  onClick={startDelete}
                   title="Permanently delete this session from the database"
                 >
                   <i className="fas fa-trash-alt me-1"></i> Delete
@@ -229,7 +254,7 @@ const SessionModal: React.FC<SessionModalProps> = ({
               {(isAdmin || isOwner) && session.status !== "cancelled" && (
                 <button
                   className="btn btn-outline-secondary"
-                  onClick={handleCancel}
+                  onClick={startCancel}
                 >
                   <i className="fas fa-ban me-1"></i> Cancel Session
                 </button>
@@ -302,10 +327,13 @@ const SessionModal: React.FC<SessionModalProps> = ({
                 </button>
                 <button
                   type="button"
-                  className="btn btn-danger"
-                  onClick={() => performCancel(cancelFutureSessions)}
+                  className="btn btn-primary"
+                  onClick={() => {
+                    setShowCancelDialog(false);
+                    setShowReasonDialog(true);
+                  }}
                 >
-                  Confirm Cancellation
+                  Next
                 </button>
               </div>
             </div>
@@ -379,10 +407,72 @@ const SessionModal: React.FC<SessionModalProps> = ({
                 </button>
                 <button
                   type="button"
-                  className="btn btn-danger"
-                  onClick={() => performDelete(deleteAllRelated)}
+                  className="btn btn-primary"
+                  onClick={() => {
+                    setShowDeleteDialog(false);
+                    setShowReasonDialog(true);
+                  }}
                 >
-                  Confirm Deletion
+                  Next
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reason input dialog */}
+      {showReasonDialog && (
+        <div
+          className="modal show d-block"
+          style={{ backgroundColor: "rgba(0,0,0,0.5)" }}
+        >
+          <div className="modal-dialog modal-dialog-centered">
+            <div className="modal-content">
+              <div className="modal-header">
+                <h5 className="modal-title">
+                  {currentAction === "reject" && "Provide Rejection Reason"}
+                  {currentAction === "cancel" && "Provide Cancellation Reason"}
+                  {currentAction === "delete" && "Provide Deletion Reason"}
+                </h5>
+                <button
+                  type="button"
+                  className="btn-close"
+                  onClick={() => setShowReasonDialog(false)}
+                ></button>
+              </div>
+              <div className="modal-body">
+                <p>
+                  Please provide a reason that will be included in the email notification 
+                  to the user:
+                </p>
+
+                <div className="form-group">
+                  <textarea
+                    className="form-control"
+                    rows={4}
+                    value={reason}
+                    onChange={(e) => setReason(e.target.value)}
+                    placeholder="Enter reason here..."
+                  ></textarea>
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => setShowReasonDialog(false)}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={submitActionWithReason}
+                >
+                  {currentAction === "reject" && "Reject Session"}
+                  {currentAction === "cancel" && "Cancel Session"}
+                  {currentAction === "delete" && "Delete Session"}
                 </button>
               </div>
             </div>
