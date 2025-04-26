@@ -9,7 +9,10 @@ export interface ISession extends Document {
   user: mongoose.Types.ObjectId;
   status: 'pending' | 'approved' | 'rejected' | 'cancelled';
   createdAt: Date;
-  // New recurrence fields
+  // Status update tracking fields
+  statusUpdatedAt?: Date; // When status was last updated
+  statusUpdatedBy?: mongoose.Types.ObjectId; // Who updated the status (admin)
+  // Recurrence fields
   isRecurring: boolean;
   recurrenceType: 'weekly' | 'biweekly' | 'monthly' | null;
   recurrenceEndDate: Date | null;
@@ -50,7 +53,15 @@ const SessionSchema: Schema = new Schema({
     type: Date,
     default: Date.now
   },
-  // New recurrence fields
+  // Status update tracking fields
+  statusUpdatedAt: {
+    type: Date
+  },
+  statusUpdatedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  },
+  // Recurrence fields
   isRecurring: {
     type: Boolean,
     default: false
@@ -101,6 +112,11 @@ SessionSchema.pre('save', function(this: ISession, next) {
     if (this.recurrenceEndDate > oneYearFromNow) {
       throw new Error('Recurring events cannot be scheduled more than one year in advance');
     }
+  }
+  
+  // Set status update timestamp whenever status changes
+  if (this.isModified('status')) {
+    this.statusUpdatedAt = new Date();
   }
   
   next();

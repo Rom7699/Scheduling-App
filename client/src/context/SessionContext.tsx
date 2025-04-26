@@ -13,9 +13,26 @@ interface SessionContextType extends SessionState {
   getSessions: () => Promise<void>;
   getSessionById: (id: string) => Promise<void>;
   createSession: (sessionData: Partial<Session>) => Promise<void>;
-  updateSessionStatus: (id: string, status: Session["status"]) => Promise<void>;
-  cancelSession: (id: string, cancelFutureSessions?: boolean) => Promise<void>;
-  deleteSession: (id: string, deleteAllRelated?: boolean) => Promise<void>;  // New method
+  updateSessionStatus: (
+    id: string,
+    status: Session["status"],
+    reason?: string
+  ) => Promise<void>;
+  updateSessionTime: (
+    id: string,
+    startTime: Date,
+    endTime: Date
+  ) => Promise<void>;
+  cancelSession: (
+    id: string,
+    cancelFutureSessions?: boolean,
+    reason?: string
+  ) => Promise<void>;
+  deleteSession: (
+    id: string,
+    deleteAllRelated?: boolean,
+    reason?: string
+  ) => Promise<void>;
   getCalendarMonth: (
     year: number,
     month: number,
@@ -50,9 +67,10 @@ const SessionContext = createContext<SessionContextType>({
   getSessionById: async () => {},
   createSession: async () => {},
   updateSessionStatus: async () => {},
+  updateSessionTime: async () => {},
   cancelSession: async () => {},
   getCalendarMonth: async () => {},
-  deleteSession: async () => {},  // New method
+  deleteSession: async () => {}, // New method
   getCalendarWeek: async () => {},
   getCalendarDay: async () => {},
   clearSessionErrors: () => {},
@@ -65,7 +83,7 @@ type SessionAction =
   | { type: "CREATE_SESSION"; payload: Session }
   | { type: "UPDATE_SESSION"; payload: Session }
   | { type: "CANCEL_SESSION"; payload: Session }
-  | { type: 'DELETE_SESSION'; payload: string }  // New action type
+  | { type: "DELETE_SESSION"; payload: string } // New action type
   | { type: "SESSION_ERROR"; payload: string }
   | { type: "SET_LOADING" }
   | { type: "CLEAR_ERRORS" };
@@ -251,12 +269,18 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   };
 
-  // Update session status (admin only)
-  const updateSessionStatus = async (id: string, status: Session["status"]) => {
+  const updateSessionStatus = async (
+    id: string,
+    status: Session["status"],
+    reason?: string
+  ) => {
     setAuthToken();
     dispatch({ type: "SET_LOADING" });
     try {
-      const res = await axios.put(`/api/sessions/${id}/status`, { status });
+      const res = await axios.put(`/api/sessions/${id}/status`, {
+        status,
+        reason, // Pass reason to API but it won't be stored in DB
+      });
 
       // Convert date strings to Date objects
       const session = {
@@ -281,13 +305,60 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   };
 
-  // Cancel session with option to cancel future occurrences
-  const cancelSession = async (id: string, cancelFutureSessions = false) => {
+  // Update session time (can only be done by the session owner)
+  const updateSessionTime = async (
+    id: string,
+    startTime: Date,
+    endTime: Date
+  ) => {
+    setAuthToken();
+    dispatch({ type: "SET_LOADING" });
+    try {
+      const res = await axios.put(`/api/sessions/${id}/reschedule`, {
+        startTime,
+        endTime,
+      });
+
+      // Convert date strings to Date objects
+      const session = {
+        ...res.data.session,
+        startTime: new Date(res.data.session.startTime),
+        endTime: new Date(res.data.session.endTime),
+        createdAt: new Date(res.data.session.createdAt),
+        recurrenceEndDate: res.data.session.recurrenceEndDate
+          ? new Date(res.data.session.recurrenceEndDate)
+          : null,
+      };
+
+      dispatch({
+        type: "UPDATE_SESSION",
+        payload: session,
+      });
+
+      return res.data.session;
+    } catch (err: any) {
+      dispatch({
+        type: "SESSION_ERROR",
+        payload: err.response?.data?.message || "Error updating session time",
+      });
+      throw err; // Rethrow for component handling
+    }
+  };
+
+  // Cancel session with option for reason
+  const cancelSession = async (
+    id: string,
+    cancelFutureSessions = false,
+    reason?: string
+  ) => {
     setAuthToken();
     dispatch({ type: "SET_LOADING" });
     try {
       const res = await axios.delete(`/api/sessions/${id}`, {
-        data: { cancelFutureSessions },
+        data: {
+          cancelFutureSessions,
+          reason, // Pass reason to API for email notification
+        },
       });
 
       // Convert date strings to Date objects
@@ -318,8 +389,12 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   };
 
-  // New method: Permanently delete a session (admin only)
-  const deleteSession = async (id: string, deleteAllRelated = false) => {
+  // Delete session with option for reason
+  const deleteSession = async (
+    id: string,
+    deleteAllRelated = false,
+    reason?: string
+  ) => {
     // Only admins can delete sessions
     if (!user?.isAdmin) {
       dispatch({
@@ -334,7 +409,10 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({
 
     try {
       await axios.delete(`/api/sessions/${id}/permanent`, {
-        data: { deleteAllRelated },
+        data: {
+          deleteAllRelated,
+          reason, // Pass reason for email notification
+        },
       });
 
       dispatch({
@@ -488,9 +566,10 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({
         getSessionById,
         createSession,
         updateSessionStatus,
+        updateSessionTime, // Add the new method
         cancelSession,
         getCalendarMonth,
-        deleteSession,  // New method
+        deleteSession, 
         getCalendarWeek,
         getCalendarDay,
         clearSessionErrors,

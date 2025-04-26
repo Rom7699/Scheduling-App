@@ -8,7 +8,8 @@ import {
   deleteSession,  // New method
   getCalendarMonth,
   getCalendarWeek,
-  getCalendarDay
+  getCalendarDay,
+  updateSessionTime // Add the new controller method
 } from '../controllers/sessionController';
 import { auth, adminOnly } from '../middleware/auth';
 
@@ -19,6 +20,7 @@ router.post('/', auth, createSession);
 router.get('/', auth, getSessions);
 router.get('/:id', auth, getSessionById);
 router.put('/:id/status', auth, adminOnly, updateSessionStatus);
+router.put('/:id/reschedule', auth, updateSessionTime); // New route for updating session time
 router.delete('/:id', auth, cancelSession); 
 router.delete('/:id/permanent', auth, adminOnly, deleteSession); // New route for permanent deletion
 
