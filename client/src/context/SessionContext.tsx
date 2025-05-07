@@ -23,6 +23,7 @@ interface SessionContextType extends SessionState {
     startTime: Date,
     endTime: Date
   ) => Promise<void>;
+  updateSessionPayment: (id: string) => Promise<void>; // Add this new method
   cancelSession: (
     id: string,
     cancelFutureSessions?: boolean,
@@ -68,9 +69,10 @@ const SessionContext = createContext<SessionContextType>({
   createSession: async () => {},
   updateSessionStatus: async () => {},
   updateSessionTime: async () => {},
+  updateSessionPayment: async () => {},
   cancelSession: async () => {},
   getCalendarMonth: async () => {},
-  deleteSession: async () => {}, // New method
+  deleteSession: async () => {},
   getCalendarWeek: async () => {},
   getCalendarDay: async () => {},
   clearSessionErrors: () => {},
@@ -345,6 +347,36 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   };
 
+  // Update session payment status (admin only)
+  const updateSessionPayment = async (id: string) => {
+    setAuthToken();
+    dispatch({ type: "SET_LOADING" });
+    try {
+      const res = await axios.put(`/api/sessions/${id}/payment`);
+  
+      // Convert date strings to Date objects
+      const session = {
+        ...res.data.session,
+        startTime: new Date(res.data.session.startTime),
+        endTime: new Date(res.data.session.endTime),
+        createdAt: new Date(res.data.session.createdAt),
+        recurrenceEndDate: res.data.session.recurrenceEndDate
+          ? new Date(res.data.session.recurrenceEndDate)
+          : null,
+      };
+  
+      dispatch({
+        type: "UPDATE_SESSION",
+        payload: session,
+      });
+    } catch (err: any) {
+      dispatch({
+        type: "SESSION_ERROR",
+        payload: err.response?.data?.message || "Error updating payment status",
+      });
+    }
+  };  
+
   // Cancel session with option for reason
   const cancelSession = async (
     id: string,
@@ -566,10 +598,11 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({
         getSessionById,
         createSession,
         updateSessionStatus,
-        updateSessionTime, // Add the new method
+        updateSessionTime, 
+        updateSessionPayment,
         cancelSession,
         getCalendarMonth,
-        deleteSession, 
+        deleteSession,
         getCalendarWeek,
         getCalendarDay,
         clearSessionErrors,

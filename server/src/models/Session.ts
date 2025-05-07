@@ -17,6 +17,7 @@ export interface ISession extends Document {
   recurrenceType: 'weekly' | 'biweekly' | 'monthly' | null;
   recurrenceEndDate: Date | null;
   parentSessionId: mongoose.Types.ObjectId | null; // Links child sessions to their parent
+  isPaid: boolean; // Indicates if the session is paid
 }
 
 const SessionSchema: Schema = new Schema({
@@ -79,7 +80,11 @@ const SessionSchema: Schema = new Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Session',
     default: null
-  }
+  },
+  isPaid: {
+    type: Boolean,
+    default: false
+  },
 });
 
 // Validate that endTime is after startTime

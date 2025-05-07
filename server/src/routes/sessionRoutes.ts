@@ -5,11 +5,12 @@ import {
   getSessionById, 
   updateSessionStatus, 
   cancelSession,
-  deleteSession,  // New method
+  deleteSession,  
   getCalendarMonth,
   getCalendarWeek,
   getCalendarDay,
-  updateSessionTime // Add the new controller method
+  updateSessionTime,
+  updateSessionPayment 
 } from '../controllers/sessionController';
 import { auth, adminOnly } from '../middleware/auth';
 
@@ -21,6 +22,7 @@ router.get('/', auth, getSessions);
 router.get('/:id', auth, getSessionById);
 router.put('/:id/status', auth, adminOnly, updateSessionStatus);
 router.put('/:id/reschedule', auth, updateSessionTime); // New route for updating session time
+router.put('/:id/payment', auth, adminOnly, updateSessionPayment); // New route for updating session payment status
 router.delete('/:id', auth, cancelSession); 
 router.delete('/:id/permanent', auth, adminOnly, deleteSession); // New route for permanent deletion
 
