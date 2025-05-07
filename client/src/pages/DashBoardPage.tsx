@@ -1,8 +1,9 @@
 // client/src/pages/DashboardPage.tsx
-import React, { useEffect } from 'react';
-import { useSession } from '../context/SessionContext';
-import { useAuth } from '../context/AuthContext';
-import CalendarView from '../components/Calendar/CalendarView';
+import React, { useEffect } from "react";
+import { useSession } from "../context/SessionContext";
+import { useAuth } from "../context/AuthContext";
+import CalendarView from "../components/Calendar/CalendarView";
+import PaymentSummary from "../components/DashBoard/PaymentSummary";
 
 const DashboardPage: React.FC = () => {
   const { sessions, getSessions, loading, error } = useSession();
@@ -13,9 +14,15 @@ const DashboardPage: React.FC = () => {
   }, []);
 
   // Filter sessions by status
-  const pendingSessions = sessions.filter(session => session.status === 'pending');
-  const approvedSessions = sessions.filter(session => session.status === 'approved');
-  const rejectedSessions = sessions.filter(session => session.status === 'rejected');
+  const pendingSessions = sessions.filter(
+    (session) => session.status === "pending"
+  );
+  const approvedSessions = sessions.filter(
+    (session) => session.status === "approved"
+  );
+  const rejectedSessions = sessions.filter(
+    (session) => session.status === "rejected"
+  );
 
   return (
     <div className="container mt-4">
@@ -65,6 +72,13 @@ const DashboardPage: React.FC = () => {
               <CalendarView />
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* Payment Summary */}
+      <div className="row">
+        <div className="col-12">
+          <PaymentSummary sessions={sessions} />
         </div>
       </div>
     </div>

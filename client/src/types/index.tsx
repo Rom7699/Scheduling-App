@@ -15,10 +15,10 @@ export interface Session {
   description: string;
   startTime: Date;
   endTime: Date;
-  user: User | string; // Can be a User object or just the user ID string
+  user: User | string; 
   status: 'pending' | 'approved' | 'rejected' | 'cancelled';
+  isPaid: boolean; 
   createdAt: Date;
-  // New recurrence fields
   isRecurring?: boolean;
   recurrenceType?: 'weekly' | 'biweekly' | 'monthly' | null;
   recurrenceEndDate?: Date | null;
@@ -72,6 +72,7 @@ export interface CalendarEvent {
   start: Date;
   end: Date;
   status: Session['status'];
+  isPaid: boolean; // Add payment status to calendar events
   resource: Session;
   isRecurring?: boolean;
 }

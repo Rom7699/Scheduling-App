@@ -17,7 +17,7 @@ const SessionModal: React.FC<SessionModalProps> = ({
   show,
   onClose,
 }) => {
-  const { updateSessionStatus, cancelSession, deleteSession } = useSession();
+  const { updateSessionStatus, cancelSession, deleteSession, updateSessionPayment } = useSession();
 
   const { user } = useAuth();
 
@@ -101,6 +101,13 @@ const SessionModal: React.FC<SessionModalProps> = ({
     }
   };
 
+  // Handle payment toggle
+  const handlePaymentToggle = () => {
+    if (session.status === 'approved') {
+      updateSessionPayment(session._id);
+    }
+  };
+
   // Submit the current action with reason
   const submitActionWithReason = () => {
     switch (currentAction) {
@@ -161,14 +168,10 @@ const SessionModal: React.FC<SessionModalProps> = ({
 
     // Check time constraint - 12 hours before start
     const now = new Date();
-    console.log("Current time:", now);
-    console.log("Session start time:", session.startTime, typeof session.startTime.getDate);
     const sessionStart = new Date(session.startTime);
     const diffHours =
       (sessionStart.getTime() - now.getTime()) / (1000 * 60 * 60);
-      console.log("Difference in hours:", diffHours);
     const hasEnoughTimeBeforeStart = diffHours >= 12;
-    console.log("Has enough time before start:", hasEnoughTimeBeforeStart);
 
     return hasEditableStatus && hasEnoughTimeBeforeStart;
   };
@@ -218,6 +221,23 @@ const SessionModal: React.FC<SessionModalProps> = ({
                       <span className="ms-2">{getRecurrenceText()}</span>
                     </div>
                   )}
+
+                  {/* Show payment status */}
+                  <div className="d-flex align-items-center mt-2">
+                    <i className={`fas ${session.isPaid ? 'fa-check-circle text-success' : 'fa-dollar-sign text-muted'} me-2`}></i>
+                    <span className="fw-bold">Payment Status:</span>
+                    <span className="ms-2">
+                      {session.isPaid ? 'Paid' : 'Not paid'}
+                    </span>
+                    {isAdmin && session.status === 'approved' && (
+                      <button 
+                        className={`btn btn-sm ms-2 ${session.isPaid ? 'btn-outline-success' : 'btn-success'}`}
+                        onClick={handlePaymentToggle}
+                      >
+                        {session.isPaid ? 'Mark as Unpaid' : 'Mark as Paid'}
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 <div className="session-description mb-4">
