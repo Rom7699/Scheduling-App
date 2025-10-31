@@ -2,7 +2,11 @@ import { Request, Response } from "express";
 import Session from "../models/Session";
 import User from "../models/User";
 import mongoose from "mongoose";
-import { sendSessionStatusEmail, sendSessionUpdateEmail } from "../services/emailService";
+import {
+  sendSessionStatusEmail,
+  sendSessionUpdateEmail,
+  sendNewSessionNotification,
+} from "../services/emailService";
 
 export const createSession = async (req: Request, res: Response) => {
   try {
@@ -42,6 +46,41 @@ export const createSession = async (req: Request, res: Response) => {
         title,
         description
       );
+    }
+
+    // Send email notification to all admins about the new session request
+    try {
+      // Get user information for the email
+      const userDoc = await User.findById(req.user?._id);
+
+      if (userDoc) {
+        // Find all admin users to notify
+        const adminUsers = await User.find({ isAdmin: true });
+
+        if (adminUsers && adminUsers.length > 0) {
+          // Send notification to each admin
+          for (const admin of adminUsers) {
+            await sendNewSessionNotification(
+              admin.email,
+              admin.name,
+              initialSession._id.toString(),
+              userDoc.name,
+              userDoc.email,
+              title,
+              new Date(startTime),
+              new Date(endTime),
+              description,
+              isRecurring,
+              recurrenceType,
+              recurrenceEndDate ? new Date(recurrenceEndDate) : undefined
+            );
+          }
+          console.log(`New session notification sent to ${adminUsers.length} admin(s)`);
+        }
+      }
+    } catch (emailError) {
+      console.error('Error sending new session notification:', emailError);
+      // Don't fail the request if email sending fails
     }
 
     res.status(201).json({
@@ -192,27 +231,27 @@ export const updateSessionStatus = async (req: Request, res: Response) => {
     session.status = status;
     session.statusUpdatedAt = new Date();
     session.statusUpdatedBy = req.user?._id;
-    
+
     await session.save();
 
     // Send email notification to the user about the status change
     try {
       // Get the user's email
       const userDoc = await User.findById(session.user);
-      
+
       if (userDoc && userDoc.email) {
         // Send the status update email (include reason in email only)
         await sendSessionStatusEmail(
           userDoc.email,
           userDoc.name,
           session.title,
-          status as 'approved' | 'rejected' | 'cancelled',
+          status as "approved" | "rejected" | "cancelled",
           session.startTime,
           reason // Pass the reason to the email but don't store it
         );
       }
     } catch (emailError) {
-      console.error('Error sending email notification:', emailError);
+      console.error("Error sending email notification:", emailError);
       // Don't fail the request if email sending fails
     }
 
@@ -248,7 +287,7 @@ export const cancelSession = async (req: Request, res: Response) => {
     session.status = "cancelled";
     session.statusUpdatedAt = new Date();
     session.statusUpdatedBy = req.user?._id;
-    
+
     await session.save();
 
     // If this is a recurring session and user wants to cancel future occurrences
@@ -261,20 +300,20 @@ export const cancelSession = async (req: Request, res: Response) => {
             parentSessionId: session.parentSessionId,
             startTime: { $gte: currentDate },
           },
-          { 
+          {
             status: "cancelled",
             statusUpdatedAt: new Date(),
-            statusUpdatedBy: req.user?._id
+            statusUpdatedBy: req.user?._id,
           }
         );
       } else {
         // This is a parent session, cancel all its children
         await Session.updateMany(
           { parentSessionId: session._id },
-          { 
+          {
             status: "cancelled",
             statusUpdatedAt: new Date(),
-            statusUpdatedBy: req.user?._id
+            statusUpdatedBy: req.user?._id,
           }
         );
       }
@@ -284,20 +323,20 @@ export const cancelSession = async (req: Request, res: Response) => {
     try {
       // Get the user's email
       const userDoc = await User.findById(session.user);
-      
+
       if (userDoc && userDoc.email) {
         // Send the cancellation email (include reason in email only)
         await sendSessionStatusEmail(
           userDoc.email,
           userDoc.name,
           session.title,
-          'cancelled',
+          "cancelled",
           session.startTime,
           reason // Pass reason to email but don't store it
         );
       }
     } catch (emailError) {
-      console.error('Error sending email notification:', emailError);
+      console.error("Error sending email notification:", emailError);
       // Don't fail the request if email sending fails
     }
 
@@ -331,7 +370,7 @@ export const deleteSession = async (req: Request, res: Response) => {
     const sessionInfo = {
       title: session.title,
       startTime: session.startTime,
-      userId: session.user
+      userId: session.user,
     };
 
     // Delete the current session
@@ -353,19 +392,20 @@ export const deleteSession = async (req: Request, res: Response) => {
     // Notify the user that their session has been deleted
     try {
       const userDoc = await User.findById(sessionInfo.userId);
-      
+
       if (userDoc && userDoc.email) {
         await sendSessionStatusEmail(
           userDoc.email,
           userDoc.name,
           sessionInfo.title,
-          'cancelled', // Use cancelled status for deletion notification
+          "cancelled", // Use cancelled status for deletion notification
           sessionInfo.startTime,
-          reason || "This session has been permanently deleted by an administrator."
+          reason ||
+            "This session has been permanently deleted by an administrator."
         );
       }
     } catch (emailError) {
-      console.error('Error sending deletion notification:', emailError);
+      console.error("Error sending deletion notification:", emailError);
     }
 
     res.status(200).json({
@@ -377,18 +417,36 @@ export const deleteSession = async (req: Request, res: Response) => {
   }
 };
 
+// Updated getCalendarMonth function in server/src/controllers/sessionController.ts
 export const getCalendarMonth = async (req: Request, res: Response) => {
   try {
     const { year, month } = req.params;
+    // Convert includeCancelled parameter from query string
+    const includeCancelled = req.query.includeCancelled === "true";
+
+    // Create date range for the specified month
     const startDate = new Date(parseInt(year), parseInt(month) - 1, 1);
     const endDate = new Date(parseInt(year), parseInt(month), 0, 23, 59, 59);
 
-    const query = {
+    // Build query based on user role and parameters
+    let query: any = {
       startTime: { $gte: startDate, $lte: endDate },
-      ...(req.user?.isAdmin ? {} : { status: "approved" }),
     };
 
-    const sessions = await Session.find(query).populate("user", "name email");
+    // If user is not admin, only show their sessions
+    if (!req.user?.isAdmin) {
+      query.user = req.user?._id;
+    }
+
+    // If includeCancelled is false, exclude cancelled sessions
+    if (!includeCancelled) {
+      query.status = { $ne: "cancelled" };
+    }
+
+    // Fetch sessions for the month
+    const sessions = await Session.find(query)
+      .populate("user", "name email")
+      .sort({ startTime: 1 }); // Sort by start time ascending
 
     res.status(200).json({
       success: true,
@@ -486,9 +544,13 @@ export const updateSessionTime = async (req: Request, res: Response) => {
     }
 
     // Check if session status is valid for updates
-    if (session.status !== 'pending' && session.status !== 'approved'&& session.status !== 'rejected') {
-      return res.status(400).json({ 
-        message: "Cannot update a session that has been rejected or cancelled" 
+    if (
+      session.status !== "pending" &&
+      session.status !== "approved" &&
+      session.status !== "rejected"
+    ) {
+      return res.status(400).json({
+        message: "Cannot update a session that has been rejected or cancelled",
       });
     }
 
@@ -498,15 +560,15 @@ export const updateSessionTime = async (req: Request, res: Response) => {
     const now = new Date();
 
     if (newStartTime <= now) {
-      return res.status(400).json({ 
-        message: "Session start time must be in the future" 
+      return res.status(400).json({
+        message: "Session start time must be in the future",
       });
     }
 
     // Check if endTime is after startTime
     if (newEndTime <= newStartTime) {
       return res.status(400).json({
-        message: "End time must be after start time"
+        message: "End time must be after start time",
       });
     }
 
@@ -518,7 +580,8 @@ export const updateSessionTime = async (req: Request, res: Response) => {
     // Enforce 12-hour rule
     if (hoursUntilSession < 12) {
       return res.status(400).json({
-        message: "Sessions can only be updated at least 12 hours before their start time"
+        message:
+          "Sessions can only be updated at least 12 hours before their start time",
       });
     }
 
@@ -530,7 +593,7 @@ export const updateSessionTime = async (req: Request, res: Response) => {
     // Generate new title based on time of day and user's name
     const hour = newStartTime.getHours();
     let timeOfDay;
-    
+
     if (hour >= 5 && hour < 12) {
       timeOfDay = "Morning";
     } else if (hour >= 12 && hour < 17) {
@@ -538,11 +601,11 @@ export const updateSessionTime = async (req: Request, res: Response) => {
     } else {
       timeOfDay = "Evening";
     }
-    
+
     // Get the user's name for the title
     const userDoc = await User.findById(session.user);
     const userName = userDoc ? userDoc.name : "User";
-    
+
     // Create the new title
     const newTitle = `${userName} - ${timeOfDay} Session`;
 
@@ -552,14 +615,14 @@ export const updateSessionTime = async (req: Request, res: Response) => {
     session.title = newTitle;
     session.statusUpdatedAt = now;
     session.status = "pending"; // Reset status to pending
-    
+
     await session.save();
 
     // Send email notification to admin(s)
     try {
       // Find admin users to notify
       const adminUsers = await User.find({ isAdmin: true });
-      
+
       if (adminUsers && adminUsers.length > 0) {
         // Send notifications to all admins
         for (const admin of adminUsers) {
@@ -578,13 +641,13 @@ export const updateSessionTime = async (req: Request, res: Response) => {
         }
       }
     } catch (emailError) {
-      console.error('Error sending admin notification:', emailError);
+      console.error("Error sending admin notification:", emailError);
       // Don't fail the request if email sending fails
     }
 
     res.status(200).json({
       success: true,
-      session
+      session,
     });
   } catch (error: any) {
     res.status(400).json({ message: error.message });

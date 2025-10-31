@@ -1,27 +1,90 @@
 // client/src/pages/AdminPage.tsx
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { useSession } from '../context/SessionContext';
 import moment from 'moment';
 import SessionModal from '../components/Calendar/SessionModal';
-import { Session } from '../types';
+import { Session, User } from '../types';
 
 const AdminPage: React.FC = () => {
-  const { sessions, getSessions, updateSessionPayment, loading, error } = useSession();
+  const { 
+    sessions, 
+    users,
+    getCalendarMonth, 
+    getAllUsers,
+    updateSessionPayment, 
+    loading, 
+    error 
+  } = useSession();
+  
   const [showModal, setShowModal] = useState(false);
   const [selectedSession, setSelectedSession] = useState<Session | null>(null);
   const [filter, setFilter] = useState<'all' | 'pending' | 'approved' | 'rejected' | 'cancelled'>('all');
   const [paymentFilter, setPaymentFilter] = useState<'all' | 'paid' | 'unpaid'>('all');
+  const [userFilter, setUserFilter] = useState<string>('all');
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  
+  // Add state for current month/year
+  const [currentDate, setCurrentDate] = useState<moment.Moment>(moment());
 
+  // Load sessions for the current month when component mounts or month changes
   useEffect(() => {
-    getSessions();
-  }, []);
+    loadSessionsForMonth(currentDate.year(), currentDate.month() + 1);
+    
+    // Fetch all users once when the component mounts
+    if (users.length === 0) {
+      getAllUsers();
+    }
+  }, [currentDate]);
 
-  // Filter sessions based on selected filter
+  // Function to load sessions for a specific month
+  const loadSessionsForMonth = (year: number, month: number) => {
+    getCalendarMonth(year, month, true); // true to include cancelled sessions
+  };
+
+  // Functions to navigate between months
+  const goToPreviousMonth = () => {
+    setCurrentDate(moment(currentDate).subtract(1, 'month'));
+  };
+
+  const goToNextMonth = () => {
+    setCurrentDate(moment(currentDate).add(1, 'month'));
+  };
+
+  const goToCurrentMonth = () => {
+    setCurrentDate(moment());
+  };
+
+  // Get sorted and filtered users for dropdown
+  const sortedUsers = useMemo(() => {
+    return [...users].sort((a, b) => a.name.localeCompare(b.name));
+  }, [users]);
+  
+  // Filter sessions based on selected filters
   const filteredSessions = sessions
+    // Filter by status
     .filter(session => filter === 'all' ? true : session.status === filter)
+    // Filter by payment status
     .filter(session => {
       if (paymentFilter === 'all') return true;
       return paymentFilter === 'paid' ? session.isPaid : !session.isPaid;
+    })
+    // Filter by user
+    .filter(session => {
+      if (userFilter === 'all') return true;
+      if (typeof session.user === 'string') return false;
+      return session.user.id === userFilter;
+    })
+    // Filter by search query (user name or session title)
+    .filter(session => {
+      if (!searchQuery.trim()) return true;
+      
+      const query = searchQuery.toLowerCase();
+      const title = session.title.toLowerCase();
+      const userName = typeof session.user !== 'string' 
+        ? session.user.name.toLowerCase() 
+        : '';
+        
+      return title.includes(query) || userName.includes(query);
     });
 
   // Handle session click
@@ -33,13 +96,10 @@ const AdminPage: React.FC = () => {
   // Handle payment toggle
   const handlePaymentToggle = async (sessionId: string, e: React.MouseEvent) => {
     e.stopPropagation(); // Prevent row click event
-    console.log("Toggling payment for session:", sessionId);
-
+    
     try {
       await updateSessionPayment(sessionId);
-      console.log("Payment updated successfully");
-      // Refresh the sessions list to show updated payment status
-      await getSessions();
+      // We don't need to call getSessions() because the context already updates the state
     } catch (err) {
       console.error("Failed to update payment status:", err);
     }
@@ -60,7 +120,75 @@ const AdminPage: React.FC = () => {
         <div className="col-12">
           <div className="card">
             <div className="card-header">
-              <h5>Session Requests</h5>
+              <div className="d-flex justify-content-between align-items-center flex-wrap">
+                <h5 className="mb-0">
+                  Sessions for {currentDate.format('MMMM YYYY')}
+                </h5>
+                <div className="btn-group">
+                  <button 
+                    className="btn btn-outline-secondary" 
+                    onClick={goToPreviousMonth}
+                    title="Previous Month"
+                  >
+                    <i className="fas fa-chevron-left"></i>
+                  </button>
+                  <button 
+                    className="btn btn-outline-primary" 
+                    onClick={goToCurrentMonth}
+                    title="Current Month"
+                  >
+                    Today
+                  </button>
+                  <button 
+                    className="btn btn-outline-secondary" 
+                    onClick={goToNextMonth}
+                    title="Next Month"
+                  >
+                    <i className="fas fa-chevron-right"></i>
+                  </button>
+                </div>
+              </div>
+              
+              {/* Search bar for filtering by name or title */}
+              <div className="input-group mb-3 mt-3">
+                <input
+                  type="text"
+                  className="form-control"
+                  placeholder="Search by user name or session title..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+                {searchQuery && (
+                  <button 
+                    className="btn btn-outline-secondary" 
+                    type="button"
+                    onClick={() => setSearchQuery('')}
+                  >
+                    <i className="fas fa-times"></i>
+                  </button>
+                )}
+              </div>
+              
+              {/* User filter dropdown */}
+              <div className="row mb-3">
+                <div className="col-md-4">
+                  <label htmlFor="userFilter" className="form-label">Filter by User:</label>
+                  <select 
+                    className="form-select"
+                    id="userFilter"
+                    value={userFilter}
+                    onChange={(e) => setUserFilter(e.target.value)}
+                  >
+                    <option value="all">All Users</option>
+                    {sortedUsers.map(user => (
+                      <option key={user.id} value={user.id}>
+                        {user.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              
               <div className="d-flex justify-content-between align-items-center flex-wrap">
                 <div className="btn-group mb-2 me-3">
                   <button 
@@ -119,7 +247,11 @@ const AdminPage: React.FC = () => {
             </div>
             <div className="card-body">
               {loading ? (
-                <p>Loading...</p>
+                <div className="d-flex justify-content-center">
+                  <div className="spinner-border text-primary" role="status">
+                    <span className="visually-hidden">Loading...</span>
+                  </div>
+                </div>
               ) : (
                 <div className="table-responsive">
                   <table className="table table-hover">
@@ -137,7 +269,9 @@ const AdminPage: React.FC = () => {
                     <tbody>
                       {filteredSessions.length === 0 ? (
                         <tr>
-                          <td colSpan={7}>No sessions found</td>
+                          <td colSpan={7} className="text-center">
+                            No sessions found for {currentDate.format('MMMM YYYY')}
+                          </td>
                         </tr>
                       ) : (
                         filteredSessions.map(session => (
@@ -190,6 +324,28 @@ const AdminPage: React.FC = () => {
                 </div>
               )}
             </div>
+            <div className="card-footer text-muted">
+              <div className="d-flex justify-content-between align-items-center">
+                <div>
+                  {userFilter !== 'all' && (
+                    <span className="badge bg-info me-2">
+                      User: {users.find(u => u.id === userFilter)?.name || 'Unknown'}
+                      <button 
+                        className="btn btn-sm ms-2 p-0 text-white" 
+                        title="Clear user filter"
+                        onClick={() => setUserFilter('all')}
+                      >
+                        <i className="fas fa-times"></i>
+                      </button>
+                    </span>
+                  )}
+                  Total displayed sessions: {filteredSessions.length}
+                </div>
+                <div>
+                  {currentDate.format('MMMM YYYY')}
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -201,8 +357,8 @@ const AdminPage: React.FC = () => {
           onClose={() => {
             setShowModal(false);
             setSelectedSession(null);
-            // Refresh sessions list
-            getSessions();
+            // Refresh sessions for the current month
+            loadSessionsForMonth(currentDate.year(), currentDate.month() + 1);
           }}
         />
       )}

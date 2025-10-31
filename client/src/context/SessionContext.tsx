@@ -4,14 +4,17 @@ import React, {
   useReducer,
   useContext,
   useCallback,
+  useEffect,
+  useMemo,
 } from "react";
 import axios from "axios";
-import { Session, SessionState } from "../types";
+import { Session, SessionState, User } from "../types";
 import { useAuth } from "./AuthContext";
 
 interface SessionContextType extends SessionState {
   getSessions: () => Promise<void>;
   getSessionById: (id: string) => Promise<void>;
+  getAllUsers: () => Promise<void>;
   createSession: (sessionData: Partial<Session>) => Promise<void>;
   updateSessionStatus: (
     id: string,
@@ -23,7 +26,7 @@ interface SessionContextType extends SessionState {
     startTime: Date,
     endTime: Date
   ) => Promise<void>;
-  updateSessionPayment: (id: string) => Promise<void>; // Add this new method
+  updateSessionPayment: (id: string) => Promise<void>;
   cancelSession: (
     id: string,
     cancelFutureSessions?: boolean,
@@ -53,10 +56,10 @@ interface SessionContextType extends SessionState {
   clearSessionErrors: () => void;
 }
 
-// Initial state
 const initialState: SessionState = {
   sessions: [],
   currentSession: null,
+  users: [],
   loading: false,
   error: null,
 };
@@ -66,6 +69,7 @@ const SessionContext = createContext<SessionContextType>({
   ...initialState,
   getSessions: async () => {},
   getSessionById: async () => {},
+  getAllUsers: async () => {},
   createSession: async () => {},
   updateSessionStatus: async () => {},
   updateSessionTime: async () => {},
@@ -82,10 +86,11 @@ const SessionContext = createContext<SessionContextType>({
 type SessionAction =
   | { type: "GET_SESSIONS"; payload: Session[] }
   | { type: "GET_SESSION"; payload: Session }
+  | { type: "GET_USERS"; payload: User[] }
   | { type: "CREATE_SESSION"; payload: Session }
   | { type: "UPDATE_SESSION"; payload: Session }
   | { type: "CANCEL_SESSION"; payload: Session }
-  | { type: "DELETE_SESSION"; payload: string } // New action type
+  | { type: "DELETE_SESSION"; payload: string }
   | { type: "SESSION_ERROR"; payload: string }
   | { type: "SET_LOADING" }
   | { type: "CLEAR_ERRORS" };
@@ -155,6 +160,12 @@ const sessionReducer = (
         ...state,
         error: null,
       };
+    case "GET_USERS":
+      return {
+        ...state,
+        users: action.payload,
+        loading: false,
+      };
     default:
       return state;
   }
@@ -167,8 +178,8 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({
   const [state, dispatch] = useReducer(sessionReducer, initialState);
   const { token, user } = useAuth();
 
-  // Set auth token for requests - memoize to prevent unnecessary re-renders
-  const setAuthToken = useCallback(() => {
+  // Sync auth token with axios - only runs when token changes
+  useEffect(() => {
     if (token) {
       axios.defaults.headers.common["Authorization"] = `Bearer ${token}`;
     } else {
@@ -176,13 +187,11 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   }, [token]);
 
-  // Get all sessions
-  const getSessions = async () => {
-    setAuthToken();
+  // Get all sessions - memoized to prevent infinite loops
+  const getSessions = useCallback(async () => {
     dispatch({ type: "SET_LOADING" });
     try {
       const res = await axios.get("/api/sessions");
-
       // Convert date strings to Date objects
       const sessions = res.data.sessions.map((session: any) => ({
         ...session,
@@ -199,16 +208,16 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({
         payload: sessions,
       });
     } catch (err: any) {
+      console.error("Error fetching sessions:", err);
       dispatch({
         type: "SESSION_ERROR",
         payload: err.response?.data?.message || "Error fetching sessions",
       });
     }
-  };
+  }, []);
 
-  // Get a session by ID
-  const getSessionById = async (id: string) => {
-    setAuthToken();
+  // Get a session by ID - memoized
+  const getSessionById = useCallback(async (id: string) => {
     dispatch({ type: "SET_LOADING" });
     try {
       const res = await axios.get(`/api/sessions/${id}`);
@@ -234,243 +243,189 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({
         payload: err.response?.data?.message || "Error fetching session",
       });
     }
-  };
+  }, []);
 
-  // Create new session
-  const createSession = async (sessionData: Partial<Session>) => {
-    setAuthToken();
+  // Get all users - memoized
+  const getAllUsers = useCallback(async () => {
     dispatch({ type: "SET_LOADING" });
     try {
-      const res = await axios.post("/api/sessions", sessionData);
-
-      // Convert date strings to Date objects
-      const session = {
-        ...res.data.session,
-        startTime: new Date(res.data.session.startTime),
-        endTime: new Date(res.data.session.endTime),
-        createdAt: new Date(res.data.session.createdAt),
-        recurrenceEndDate: res.data.session.recurrenceEndDate
-          ? new Date(res.data.session.recurrenceEndDate)
-          : null,
-      };
+      const res = await axios.get("/api/users");
 
       dispatch({
-        type: "CREATE_SESSION",
-        payload: session,
+        type: "GET_USERS",
+        payload: res.data.users,
       });
+    } catch (err: any) {
+      dispatch({
+        type: "SESSION_ERROR",
+        payload: err.response?.data?.message || "Error fetching users",
+      });
+    }
+  }, []);
 
-      // Automatically refresh the sessions list to get all recurring instances
-      if (session.isRecurring) {
-        getSessions();
+  // Create new session - memoized to prevent infinite loops
+  const createSession = useCallback(
+    async (sessionData: Partial<Session>) => {
+      dispatch({ type: "SET_LOADING" });
+      try {
+        const res = await axios.post("/api/sessions", sessionData);
+
+        // Convert date strings to Date objects
+        const session = {
+          ...res.data.session,
+          startTime: new Date(res.data.session.startTime),
+          endTime: new Date(res.data.session.endTime),
+          createdAt: new Date(res.data.session.createdAt),
+          recurrenceEndDate: res.data.session.recurrenceEndDate
+            ? new Date(res.data.session.recurrenceEndDate)
+            : null,
+        };
+
+        // Always refresh the sessions list after creating to get the updated calendar
+        // This handles both single and recurring sessions
+        await getSessions();
+      } catch (err: any) {
+        dispatch({
+          type: "SESSION_ERROR",
+          payload: err.response?.data?.message || "Error creating session",
+        });
       }
-    } catch (err: any) {
-      dispatch({
-        type: "SESSION_ERROR",
-        payload: err.response?.data?.message || "Error creating session",
-      });
-    }
-  };
+    },
+    [getSessions]
+  );
 
-  const updateSessionStatus = async (
-    id: string,
-    status: Session["status"],
-    reason?: string
-  ) => {
-    setAuthToken();
-    dispatch({ type: "SET_LOADING" });
-    try {
-      const res = await axios.put(`/api/sessions/${id}/status`, {
-        status,
-        reason, // Pass reason to API but it won't be stored in DB
-      });
+  // Update session status - memoized
+  const updateSessionStatus = useCallback(
+    async (id: string, status: Session["status"], reason?: string) => {
+      dispatch({ type: "SET_LOADING" });
+      try {
+        const res = await axios.put(`/api/sessions/${id}/status`, {
+          status,
+          reason, // Pass reason to API but it won't be stored in DB
+        });
 
-      // Convert date strings to Date objects
-      const session = {
-        ...res.data.session,
-        startTime: new Date(res.data.session.startTime),
-        endTime: new Date(res.data.session.endTime),
-        createdAt: new Date(res.data.session.createdAt),
-        recurrenceEndDate: res.data.session.recurrenceEndDate
-          ? new Date(res.data.session.recurrenceEndDate)
-          : null,
-      };
-
-      dispatch({
-        type: "UPDATE_SESSION",
-        payload: session,
-      });
-    } catch (err: any) {
-      dispatch({
-        type: "SESSION_ERROR",
-        payload: err.response?.data?.message || "Error updating session status",
-      });
-    }
-  };
-
-  // Update session time (can only be done by the session owner)
-  const updateSessionTime = async (
-    id: string,
-    startTime: Date,
-    endTime: Date
-  ) => {
-    setAuthToken();
-    dispatch({ type: "SET_LOADING" });
-    try {
-      const res = await axios.put(`/api/sessions/${id}/reschedule`, {
-        startTime,
-        endTime,
-      });
-
-      // Convert date strings to Date objects
-      const session = {
-        ...res.data.session,
-        startTime: new Date(res.data.session.startTime),
-        endTime: new Date(res.data.session.endTime),
-        createdAt: new Date(res.data.session.createdAt),
-        recurrenceEndDate: res.data.session.recurrenceEndDate
-          ? new Date(res.data.session.recurrenceEndDate)
-          : null,
-      };
-
-      dispatch({
-        type: "UPDATE_SESSION",
-        payload: session,
-      });
-
-      return res.data.session;
-    } catch (err: any) {
-      dispatch({
-        type: "SESSION_ERROR",
-        payload: err.response?.data?.message || "Error updating session time",
-      });
-      throw err; // Rethrow for component handling
-    }
-  };
-
-  // Update session payment status (admin only)
-  const updateSessionPayment = async (id: string) => {
-    setAuthToken();
-    dispatch({ type: "SET_LOADING" });
-    try {
-      const res = await axios.put(`/api/sessions/${id}/payment`);
-  
-      // Convert date strings to Date objects
-      const session = {
-        ...res.data.session,
-        startTime: new Date(res.data.session.startTime),
-        endTime: new Date(res.data.session.endTime),
-        createdAt: new Date(res.data.session.createdAt),
-        recurrenceEndDate: res.data.session.recurrenceEndDate
-          ? new Date(res.data.session.recurrenceEndDate)
-          : null,
-      };
-  
-      dispatch({
-        type: "UPDATE_SESSION",
-        payload: session,
-      });
-    } catch (err: any) {
-      dispatch({
-        type: "SESSION_ERROR",
-        payload: err.response?.data?.message || "Error updating payment status",
-      });
-    }
-  };  
-
-  // Cancel session with option for reason
-  const cancelSession = async (
-    id: string,
-    cancelFutureSessions = false,
-    reason?: string
-  ) => {
-    setAuthToken();
-    dispatch({ type: "SET_LOADING" });
-    try {
-      const res = await axios.delete(`/api/sessions/${id}`, {
-        data: {
-          cancelFutureSessions,
-          reason, // Pass reason to API for email notification
-        },
-      });
-
-      // Convert date strings to Date objects
-      const session = {
-        ...res.data.session,
-        startTime: new Date(res.data.session.startTime),
-        endTime: new Date(res.data.session.endTime),
-        createdAt: new Date(res.data.session.createdAt),
-        recurrenceEndDate: res.data.session.recurrenceEndDate
-          ? new Date(res.data.session.recurrenceEndDate)
-          : null,
-      };
-
-      dispatch({
-        type: "CANCEL_SESSION",
-        payload: session,
-      });
-
-      // If cancelling future occurrences, refresh sessions to update the UI
-      if (cancelFutureSessions) {
-        getSessions();
+        // Refresh sessions to ensure calendar shows updated status
+        await getSessions();
+      } catch (err: any) {
+        dispatch({
+          type: "SESSION_ERROR",
+          payload:
+            err.response?.data?.message || "Error updating session status",
+        });
       }
-    } catch (err: any) {
-      dispatch({
-        type: "SESSION_ERROR",
-        payload: err.response?.data?.message || "Error cancelling session",
-      });
-    }
-  };
+    },
+    [getSessions]
+  );
 
-  // Delete session with option for reason
-  const deleteSession = async (
-    id: string,
-    deleteAllRelated = false,
-    reason?: string
-  ) => {
-    // Only admins can delete sessions
-    if (!user?.isAdmin) {
-      dispatch({
-        type: "SESSION_ERROR",
-        payload: "Not authorized to delete sessions",
-      });
-      return;
-    }
+  // Update session time (can only be done by the session owner) - memoized
+  const updateSessionTime = useCallback(
+    async (id: string, startTime: Date, endTime: Date) => {
+      dispatch({ type: "SET_LOADING" });
+      try {
+        const res = await axios.put(`/api/sessions/${id}/reschedule`, {
+          startTime,
+          endTime,
+        });
 
-    setAuthToken();
-    dispatch({ type: "SET_LOADING" });
+        // Refresh sessions to ensure calendar shows updated time
+        await getSessions();
 
-    try {
-      await axios.delete(`/api/sessions/${id}/permanent`, {
-        data: {
-          deleteAllRelated,
-          reason, // Pass reason for email notification
-        },
-      });
-
-      dispatch({
-        type: "DELETE_SESSION",
-        payload: id,
-      });
-
-      // If we're deleting all related sessions, refresh the session list
-      if (deleteAllRelated) {
-        getSessions();
+        return res.data.session;
+      } catch (err: any) {
+        dispatch({
+          type: "SESSION_ERROR",
+          payload: err.response?.data?.message || "Error updating session time",
+        });
+        throw err; // Rethrow for component handling
       }
-    } catch (err: any) {
-      dispatch({
-        type: "SESSION_ERROR",
-        payload: err.response?.data?.message || "Error deleting session",
-      });
-    }
-  };
+    },
+    [getSessions]
+  );
 
-  // Get sessions for a specific month with option to include cancelled sessions
-  const getCalendarMonth = async (
+  // Update session payment status (admin only) - memoized
+  const updateSessionPayment = useCallback(
+    async (id: string) => {
+      dispatch({ type: "SET_LOADING" });
+      try {
+        const res = await axios.put(`/api/sessions/${id}/payment`);
+
+        // Refresh sessions to ensure calendar shows updated payment status
+        await getSessions();
+      } catch (err: any) {
+        dispatch({
+          type: "SESSION_ERROR",
+          payload:
+            err.response?.data?.message || "Error updating payment status",
+        });
+      }
+    },
+    [getSessions]
+  );
+
+  // Cancel session with option for reason - memoized
+  const cancelSession = useCallback(
+    async (id: string, cancelFutureSessions = false, reason?: string) => {
+      dispatch({ type: "SET_LOADING" });
+      try {
+        const res = await axios.delete(`/api/sessions/${id}`, {
+          data: {
+            cancelFutureSessions,
+            reason, // Pass reason to API for email notification
+          },
+        });
+
+        // Always refresh sessions to ensure calendar is up-to-date
+        await getSessions();
+      } catch (err: any) {
+        dispatch({
+          type: "SESSION_ERROR",
+          payload: err.response?.data?.message || "Error cancelling session",
+        });
+      }
+    },
+    [getSessions]
+  );
+
+  // Delete session with option for reason - memoized
+  const deleteSession = useCallback(
+    async (id: string, deleteAllRelated = false, reason?: string) => {
+      // Only admins can delete sessions
+      if (!user?.isAdmin) {
+        dispatch({
+          type: "SESSION_ERROR",
+          payload: "Not authorized to delete sessions",
+        });
+        return;
+      }
+
+      dispatch({ type: "SET_LOADING" });
+
+      try {
+        await axios.delete(`/api/sessions/${id}/permanent`, {
+          data: {
+            deleteAllRelated,
+            reason, // Pass reason for email notification
+          },
+        });
+
+        // Always refresh sessions to ensure calendar is up-to-date
+        await getSessions();
+      } catch (err: any) {
+        dispatch({
+          type: "SESSION_ERROR",
+          payload: err.response?.data?.message || "Error deleting session",
+        });
+      }
+    },
+    [getSessions, user?.isAdmin]
+  );
+
+  // Get sessions for a specific month with option to include cancelled sessions - memoized
+  const getCalendarMonth = useCallback(async (
     year: number,
     month: number,
     includeCancelled = false
   ) => {
-    setAuthToken();
     dispatch({ type: "SET_LOADING" });
     try {
       const res = await axios.get(
@@ -501,15 +456,14 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({
         payload: err.response?.data?.message || "Error fetching calendar data",
       });
     }
-  };
+  }, []);
 
-  // Get sessions for a specific week with option to include cancelled sessions
-  const getCalendarWeek = async (
+  // Get sessions for a specific week with option to include cancelled sessions - memoized
+  const getCalendarWeek = useCallback(async (
     year: number,
     week: number,
     includeCancelled = false
   ) => {
-    setAuthToken();
     dispatch({ type: "SET_LOADING" });
     try {
       const res = await axios.get(
@@ -540,16 +494,15 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({
         payload: err.response?.data?.message || "Error fetching calendar data",
       });
     }
-  };
+  }, []);
 
-  // Get sessions for a specific day with option to include cancelled sessions
-  const getCalendarDay = async (
+  // Get sessions for a specific day with option to include cancelled sessions - memoized
+  const getCalendarDay = useCallback(async (
     year: number,
     month: number,
     day: number,
     includeCancelled = false
   ) => {
-    setAuthToken();
     dispatch({ type: "SET_LOADING" });
     try {
       const res = await axios.get(
@@ -580,34 +533,47 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({
         payload: err.response?.data?.message || "Error fetching calendar data",
       });
     }
-  };
+  }, []);
 
-  // Clear errors
-  const clearSessionErrors = () => {
+  // Clear errors - memoized
+  const clearSessionErrors = useCallback(() => {
     dispatch({ type: "CLEAR_ERRORS" });
-  };
+  }, []);
+
+  // Memoize context value to prevent infinite re-renders
+  // Only include state values in dependencies - memoized functions never change
+  const contextValue = useMemo(
+    () => ({
+      sessions: state.sessions,
+      currentSession: state.currentSession,
+      users: state.users,
+      loading: state.loading,
+      error: state.error,
+      getSessions,
+      getSessionById,
+      createSession,
+      updateSessionStatus,
+      updateSessionTime,
+      updateSessionPayment,
+      cancelSession,
+      getCalendarMonth,
+      deleteSession,
+      getCalendarWeek,
+      getCalendarDay,
+      clearSessionErrors,
+      getAllUsers,
+    }),
+    [
+      state.sessions,
+      state.currentSession,
+      state.users,
+      state.loading,
+      state.error,
+    ]
+  );
 
   return (
-    <SessionContext.Provider
-      value={{
-        sessions: state.sessions,
-        currentSession: state.currentSession,
-        loading: state.loading,
-        error: state.error,
-        getSessions,
-        getSessionById,
-        createSession,
-        updateSessionStatus,
-        updateSessionTime, 
-        updateSessionPayment,
-        cancelSession,
-        getCalendarMonth,
-        deleteSession,
-        getCalendarWeek,
-        getCalendarDay,
-        clearSessionErrors,
-      }}
-    >
+    <SessionContext.Provider value={contextValue}>
       {children}
     </SessionContext.Provider>
   );

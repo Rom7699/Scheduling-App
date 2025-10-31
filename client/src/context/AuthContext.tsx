@@ -1,5 +1,5 @@
 // client/src/context/AuthContext.tsx
-import React, { createContext, useReducer, useContext, useEffect, useCallback } from 'react';
+import React, { createContext, useReducer, useContext, useEffect, useCallback, useMemo } from 'react';
 import axios from 'axios';
 import { User, AuthState } from '../types';
 
@@ -81,27 +81,6 @@ const authReducer = (state: AuthState, action: AuthAction): AuthState => {
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [state, dispatch] = useReducer(authReducer, initialState);
 
-  // Load user - using useCallback to avoid infinite loops
-  const loadUser = useCallback(async () => {
-    if (localStorage.token) {
-      axios.defaults.headers.common['Authorization'] = `Bearer ${localStorage.token}`;
-    } else {
-      delete axios.defaults.headers.common['Authorization'];
-      dispatch({ type: 'AUTH_ERROR' });
-      return;
-    }
-
-    try {
-      const res = await axios.get('/api/auth/me');
-      dispatch({
-        type: 'USER_LOADED',
-        payload: res.data.user
-      });
-    } catch (err) {
-      dispatch({ type: 'AUTH_ERROR' });
-    }
-  }, []);
-
   useEffect(() => {
     const loadUser = async () => {
       if (localStorage.token) {
@@ -124,8 +103,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     loadUser();
   }, []); // Empty dependency array is correct here
 
-  // Register user
-  const register = async (name: string, email: string, password: string) => {
+  // Register user - memoized
+  const register = useCallback(async (name: string, email: string, password: string) => {
     try {
       const res = await axios.post('/api/auth/register', { name, email, password });
       dispatch({
@@ -138,10 +117,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         payload: err.response?.data?.message || 'Registration failed'
       });
     }
-  };
+  }, []);
 
-  // Login user
-  const login = async (email: string, password: string) => {
+  // Login user - memoized
+  const login = useCallback(async (email: string, password: string) => {
     try {
       const res = await axios.post('/api/auth/login', { email, password });
       dispatch({
@@ -154,32 +133,37 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         payload: err.response?.data?.message || 'Login failed'
       });
     }
-  };
+  }, []);
 
-  // Logout
-  const logout = () => {
+  // Logout - memoized
+  const logout = useCallback(() => {
     dispatch({ type: 'LOGOUT' });
-  };
+  }, []);
 
-  // Clear errors
-  const clearErrors = () => {
+  // Clear errors - memoized
+  const clearErrors = useCallback(() => {
     dispatch({ type: 'CLEAR_ERRORS' });
-  };
+  }, []);
+
+  // Memoize the context value to prevent unnecessary re-renders
+  // Only include state values in dependencies - memoized functions never change
+  const contextValue = useMemo(
+    () => ({
+      user: state.user,
+      token: state.token,
+      isAuthenticated: state.isAuthenticated,
+      loading: state.loading,
+      error: state.error,
+      register,
+      login,
+      logout,
+      clearErrors
+    }),
+    [state.user, state.token, state.isAuthenticated, state.loading, state.error]
+  );
 
   return (
-    <AuthContext.Provider
-      value={{
-        user: state.user,
-        token: state.token,
-        isAuthenticated: state.isAuthenticated,
-        loading: state.loading,
-        error: state.error,
-        register,
-        login,
-        logout,
-        clearErrors
-      }}
-    >
+    <AuthContext.Provider value={contextValue}>
       {children}
     </AuthContext.Provider>
   );
