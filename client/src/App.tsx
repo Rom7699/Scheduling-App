@@ -22,7 +22,7 @@ const App: React.FC = () => {
   return (
     <AuthProvider>
       <SessionProvider>
-        <Router>
+        <Router future={{ v7_relativeSplatPath: true, v7_startTransition: true }}>
           <Navbar />
           <Routes>
             <Route path="/" element={<HomePage />} />

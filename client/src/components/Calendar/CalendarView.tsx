@@ -1,5 +1,5 @@
 // client/src/components/Calendar/CalendarView.tsx
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { Calendar, momentLocalizer, Views, View } from "react-big-calendar";
 import moment from "moment";
 import "react-big-calendar/lib/css/react-big-calendar.css";
@@ -23,29 +23,25 @@ const CalendarView: React.FC = () => {
     end: Date;
   } | null>(null);
 
-  useEffect(() => {
-    getSessions();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
-  // Transform sessions into calendar events
-  const events = sessions.map((session) => ({
+  // Transform sessions into calendar events - MEMOIZED for performance
+  const events = useMemo(() => sessions.map((session) => ({
     id: session._id,
     title: session.title,
     start: new Date(session.startTime),
     end: new Date(session.endTime),
     status: session.status,
     resource: session,
-  }));
+  })), [sessions]);
 
-  // Handle event click
-  const handleEventClick = (event: any) => {
+  // Handle event click - MEMOIZED
+  const handleEventClick = useCallback((event: any) => {
     setSelectedSession(event.resource);
     setShowSessionModal(true);
-  };
+  }, []);
 
-  // Handle slot selection
-  const handleSlotSelect = ({ start, end }: { start: Date; end: Date }) => {
+  // Handle slot selection - MEMOIZED
+  const handleSlotSelect = useCallback(({ start, end }: { start: Date; end: Date }) => {
     // Check if date is in current or next month
     const now = new Date();
     const startOfCurrentMonth = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -65,13 +61,13 @@ const CalendarView: React.FC = () => {
 
     setSelectedSlot({ start, end });
     setShowCreateModal(true);
-  };
+  }, []);
 
-  // Get event style based on status
-  const eventStyleGetter = (event: any) => {
-    let backgroundColor = "#4f46e5"; // Indigo (default)
-    let borderColor = "#4338ca"; // Darker indigo
-    let opacity = 0.9;
+  // Get event style based on status (Updated to match warm theme) - MEMOIZED
+  const eventStyleGetter = useCallback((event: any) => {
+    let backgroundColor = "#f43f5e"; // Rose (default)
+    let borderColor = "#e11d48"; // Darker rose
+    let opacity = 1;
     let fontWeight = "600";
 
     switch (event.status) {
@@ -88,9 +84,9 @@ const CalendarView: React.FC = () => {
         borderColor = "#dc2626"; // Darker red
         break;
       case "cancelled":
-        backgroundColor = "#6b7280"; // Gray
-        borderColor = "#4b5563"; // Darker gray
-        opacity = 0.7;
+        backgroundColor = "#78716c"; // Warm gray
+        borderColor = "#57534e"; // Darker warm gray
+        opacity = 0.8;
         break;
       default:
         break;
@@ -103,19 +99,20 @@ const CalendarView: React.FC = () => {
         borderLeft: `4px solid ${borderColor}`,
         color: "white",
         fontWeight,
-        borderRadius: "4px",
+        borderRadius: "8px",
         opacity,
-        boxShadow: "0 1px 2px rgba(0, 0, 0, 0.1)",
-        padding: "4px 8px",
+        boxShadow: "0 2px 8px rgba(0, 0, 0, 0.12)",
+        padding: "6px 10px",
         whiteSpace: "nowrap",
         overflow: "hidden",
         textOverflow: "ellipsis",
+        transition: "all 0.2s ease",
       },
     };
-  };
+  }, []);
 
-  // Custom toolbar component
-  const CustomToolbar = (toolbar: any) => {
+  // Custom toolbar component - MEMOIZED
+  const CustomToolbar = useCallback((toolbar: any) => {
     const goToToday = () => {
       toolbar.date.setMonth(new Date().getMonth());
       toolbar.date.setYear(new Date().getFullYear());
@@ -155,45 +152,48 @@ const CalendarView: React.FC = () => {
     return (
       <div className="calendar-toolbar">
         <div className="toolbar-date-nav">
-          <button className="toolbar-btn prev-btn" onClick={goToPrev}>
-            <i className="fas fa-chevron-left"></i>
+          <button className="toolbar-btn prev-btn" onClick={goToPrev} title="Previous">
+            ←
           </button>
           <button className="toolbar-btn today-btn" onClick={goToToday}>
             Today
           </button>
-          <button className="toolbar-btn next-btn" onClick={goToNext}>
-            <i className="fas fa-chevron-right"></i>
+          <button className="toolbar-btn next-btn" onClick={goToNext} title="Next">
+            →
           </button>
         </div>
           <h3 className="toolbar-label">
+            <span className="toolbar-date-icon">📅</span>
             {formattedDate}
             {weekNum}
           </h3>
         <div className="toolbar-view-options">
-          <button
-            className={`toolbar-btn view-btn ${
-              toolbar.view === "month" ? "active" : ""
-            }`}
-            onClick={goToMonth}
-          >
-            Month
-          </button>
-          <button
-            className={`toolbar-btn view-btn ${
-              toolbar.view === "week" ? "active" : ""
-            }`}
-            onClick={goToWeek}
-          >
-            Week
-          </button>
-          <button
-            className={`toolbar-btn view-btn ${
-              toolbar.view === "day" ? "active" : ""
-            }`}
-            onClick={goToDay}
-          >
-            Day
-          </button>
+          <div className="view-toggle-group">
+            <button
+              className={`toolbar-btn view-btn ${
+                toolbar.view === "month" ? "active" : ""
+              }`}
+              onClick={goToMonth}
+            >
+              Month
+            </button>
+            <button
+              className={`toolbar-btn view-btn ${
+                toolbar.view === "week" ? "active" : ""
+              }`}
+              onClick={goToWeek}
+            >
+              Week
+            </button>
+            <button
+              className={`toolbar-btn view-btn ${
+                toolbar.view === "day" ? "active" : ""
+              }`}
+              onClick={goToDay}
+            >
+              Day
+            </button>
+          </div>
           <button
             className="toolbar-btn create-btn"
             onClick={() =>
@@ -203,12 +203,12 @@ const CalendarView: React.FC = () => {
               })
             }
           >
-            <i className="fas fa-plus"></i> New Session
+            <span className="btn-icon">+</span> New Session
           </button>
         </div>
       </div>
     );
-  };
+  }, [handleSlotSelect]);
 
   // Custom header for day cells in month view
   const CustomHeader = ({ date, label }: { date: Date; label: string }) => {
@@ -227,8 +227,8 @@ const CalendarView: React.FC = () => {
     );
   };
 
-  // Format the time slots in the calendar
-  const formats = {
+  // Format the time slots in the calendar - MEMOIZED
+  const formats = useMemo(() => ({
     timeGutterFormat: (date: Date) => moment(date).format("h A"),
     eventTimeRangeFormat: ({ start, end }: { start: Date; end: Date }) => {
       return `${moment(start).format("h:mm A")} - ${moment(end).format(
@@ -240,10 +240,10 @@ const CalendarView: React.FC = () => {
         "MMM D, YYYY"
       )}`;
     },
-  };
+  }), []);
 
-  // Custom day cell component
-  const CustomDayCell = ({ children, value }: { children: React.ReactNode; value: Date }) => {
+  // Custom day cell component - MEMOIZED
+  const CustomDayCell = useCallback(({ children, value }: { children: React.ReactNode; value: Date }) => {
     const today = moment().startOf("day").toDate();
     const isToday = moment(value).isSame(today, "day");
     const isWeekend = value.getDay() === 0 || value.getDay() === 6;
@@ -252,21 +252,21 @@ const CalendarView: React.FC = () => {
     const endOfNextMonth = new Date(now.getFullYear(), now.getMonth() + 2, 0);
     const isSchedulable = value >= startOfCurrentMonth && value <= endOfNextMonth;
     const isCurrentMonth = value.getMonth() === date.getMonth();
-  
+
     return (
       <div
         className={`
-          rbc-day-bg  
-          ${isToday ? "today" : ""} 
-          ${isWeekend ? "weekend" : ""} 
-          ${!isCurrentMonth ? "different-month" : ""} 
+          rbc-day-bg
+          ${isToday ? "today" : ""}
+          ${isWeekend ? "weekend" : ""}
+          ${!isCurrentMonth ? "different-month" : ""}
           ${isSchedulable ? "schedulable" : ""}
         `}
       >
         {children}
       </div>
     );
-  };
+  }, [date]);
 
   // Message component while loading
   if (loading) {
@@ -280,9 +280,17 @@ const CalendarView: React.FC = () => {
     );
   }
 
-  const CustomHeaderCell = ({ label }: { label: string }) => {
+  // Custom header cell component - MEMOIZED
+  const CustomHeaderCell = useCallback(({ label }: { label: string }) => {
     return <span className="custom-header">{label}</span>;
-  };
+  }, []);
+
+  // Memoize calendar components object to prevent unnecessary re-renders
+  const calendarComponents = useMemo(() => ({
+    toolbar: CustomToolbar,
+    dateCellWrapper: CustomDayCell,
+    header: CustomHeaderCell
+  }), [CustomToolbar, CustomDayCell, CustomHeaderCell]);
 
   return (
     <div className="modern-calendar-container">
@@ -302,50 +310,11 @@ const CalendarView: React.FC = () => {
           onView={(newView) => setView(newView)}
           onNavigate={(newDate) => setDate(newDate)}
           eventPropGetter={eventStyleGetter}
-          components={{
-            toolbar: CustomToolbar,
-            dateCellWrapper: CustomDayCell,
-            header: CustomHeaderCell
-          }}
+          components={calendarComponents}
           formats={formats}
           popup
           tooltipAccessor={(event) => event.title}
         />
-      </div>
-
-      {/* Legend for session status */}
-      <div className="calendar-legend">
-        <div className="legend-title">Session Status</div>
-        <div className="legend-items">
-          <div className="legend-item">
-            <span
-              className="legend-color"
-              style={{ backgroundColor: "#10b981" }}
-            ></span>
-            <span className="legend-label">Approved</span>
-          </div>
-          <div className="legend-item">
-            <span
-              className="legend-color"
-              style={{ backgroundColor: "#f59e0b" }}
-            ></span>
-            <span className="legend-label">Pending</span>
-          </div>
-          <div className="legend-item">
-            <span
-              className="legend-color"
-              style={{ backgroundColor: "#ef4444" }}
-            ></span>
-            <span className="legend-label">Rejected</span>
-          </div>
-          <div className="legend-item">
-            <span
-              className="legend-color"
-              style={{ backgroundColor: "#6b7280" }}
-            ></span>
-            <span className="legend-label">Cancelled</span>
-          </div>
-        </div>
       </div>
 
       {/* Session details modal */}

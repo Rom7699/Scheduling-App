@@ -38,6 +38,7 @@ export interface AuthState {
 export interface SessionState {
   sessions: Session[];
   currentSession: Session | null;
+  users: User[]; 
   loading: boolean;
   error: string | null;
 }

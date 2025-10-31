@@ -1,4 +1,3 @@
-// server/src/index.ts
 import app from './app';
 import dotenv from 'dotenv';
 

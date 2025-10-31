@@ -2,6 +2,7 @@
 import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import './Navbar.css';
 
 const Navbar: React.FC = () => {
   const { isAuthenticated, user, logout } = useAuth();
@@ -42,17 +43,18 @@ const Navbar: React.FC = () => {
         </Link>
       </li>
       <li className="nav-item">
-        <Link className="nav-link" to="/register">
-          Register
+        <Link className="nav-link nav-link-cta" to="/register">
+          Get Started
         </Link>
       </li>
     </>
   );
 
   return (
-    <nav className="navbar navbar-expand-lg navbar-dark bg-primary">
+    <nav className="navbar navbar-expand-lg navbar-warm">
       <div className="container">
         <Link className="navbar-brand" to="/">
+          <span className="brand-icon">✨</span>
           Hedy's Studio
         </Link>
         <button
@@ -60,6 +62,9 @@ const Navbar: React.FC = () => {
           type="button"
           data-bs-toggle="collapse"
           data-bs-target="#navbarNav"
+          aria-controls="navbarNav"
+          aria-expanded="false"
+          aria-label="Toggle navigation"
         >
           <span className="navbar-toggler-icon"></span>
         </button>

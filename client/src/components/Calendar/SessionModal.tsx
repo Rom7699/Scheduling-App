@@ -1,5 +1,5 @@
 // client/src/components/Calendar/SessionModal.tsx
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import moment from "moment";
 import { Session } from "../../types";
 import { useSession } from "../../context/SessionContext";
@@ -41,14 +41,75 @@ const SessionModal: React.FC<SessionModalProps> = ({
   // State for edit modal
   const [showEditModal, setShowEditModal] = useState(false);
 
+  // State for loading actions
+  const [isLoading, setIsLoading] = useState(false);
+
+  // Ref for modal content
+  const modalContentRef = useRef<HTMLDivElement>(null);
+
   const isAdmin = user?.isAdmin;
   const isOwner =
     typeof session.user !== "string" && user?.id === session.user.id;
   const isRecurring = session.isRecurring;
 
+  // Focus trap and keyboard handling
+  useEffect(() => {
+    if (!show) return;
+
+    const modalContent = modalContentRef.current;
+    if (!modalContent) return;
+
+    // Get all focusable elements
+    const getFocusableElements = () => {
+      return modalContent.querySelectorAll(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+      );
+    };
+
+    // Focus first element
+    const focusableElements = getFocusableElements();
+    if (focusableElements.length > 0) {
+      (focusableElements[0] as HTMLElement).focus();
+    }
+
+    // Handle keyboard events
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Escape key
+      if (e.key === "Escape" && !isLoading) {
+        onClose();
+        return;
+      }
+
+      // Tab key - trap focus
+      if (e.key === "Tab") {
+        const focusableElements = Array.from(getFocusableElements()) as HTMLElement[];
+        const firstElement = focusableElements[0];
+        const lastElement = focusableElements[focusableElements.length - 1];
+
+        if (e.shiftKey && document.activeElement === firstElement) {
+          e.preventDefault();
+          lastElement?.focus();
+        } else if (!e.shiftKey && document.activeElement === lastElement) {
+          e.preventDefault();
+          firstElement?.focus();
+        }
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [show, onClose, isLoading]);
+
   if (!show) {
     return null;
   }
+
+  // Handle backdrop click
+  const handleBackdropClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (e.target === e.currentTarget && !isLoading) {
+      onClose();
+    }
+  };
 
   // Get status badge class
   const getStatusBadgeClass = () => {
@@ -67,9 +128,14 @@ const SessionModal: React.FC<SessionModalProps> = ({
   };
 
   // Handle approve
-  const handleApprove = () => {
-    updateSessionStatus(session._id, "approved");
-    onClose();
+  const handleApprove = async () => {
+    setIsLoading(true);
+    try {
+      await updateSessionStatus(session._id, "approved");
+      onClose();
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   // Initialize reject process
@@ -102,33 +168,43 @@ const SessionModal: React.FC<SessionModalProps> = ({
   };
 
   // Handle payment toggle
-  const handlePaymentToggle = () => {
+  const handlePaymentToggle = async () => {
     if (session.status === 'approved') {
-      updateSessionPayment(session._id);
+      setIsLoading(true);
+      try {
+        await updateSessionPayment(session._id);
+      } finally {
+        setIsLoading(false);
+      }
     }
   };
 
   // Submit the current action with reason
-  const submitActionWithReason = () => {
-    switch (currentAction) {
-      case "reject":
-        updateSessionStatus(session._id, "rejected", reason);
-        break;
-      case "cancel":
-        cancelSession(session._id, cancelFutureSessions, reason);
-        break;
-      case "delete":
-        deleteSession(session._id, deleteAllRelated, reason);
-        break;
+  const submitActionWithReason = async () => {
+    setIsLoading(true);
+    try {
+      switch (currentAction) {
+        case "reject":
+          await updateSessionStatus(session._id, "rejected", reason);
+          break;
+        case "cancel":
+          await cancelSession(session._id, cancelFutureSessions, reason);
+          break;
+        case "delete":
+          await deleteSession(session._id, deleteAllRelated, reason);
+          break;
+      }
+
+      // Close all dialogs
+      setShowReasonDialog(false);
+      setShowCancelDialog(false);
+      setShowDeleteDialog(false);
+
+      // Close the main modal
+      onClose();
+    } finally {
+      setIsLoading(false);
     }
-
-    // Close all dialogs
-    setShowReasonDialog(false);
-    setShowCancelDialog(false);
-    setShowDeleteDialog(false);
-
-    // Close the main modal
-    onClose();
   };
 
   // Get recurrence text
@@ -179,11 +255,21 @@ const SessionModal: React.FC<SessionModalProps> = ({
   // Render the main session modal
   return (
     <>
-      <div className="modal show d-block">
+      <div
+        className="modal show d-block"
+        onClick={handleBackdropClick}
+        style={{ backgroundColor: "rgba(0,0,0,0.5)" }}
+      >
         <div className="modal-dialog modal-dialog-centered">
-          <div className="modal-content">
+          <div
+            className="modal-content"
+            ref={modalContentRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="session-modal-title"
+          >
             <div className="modal-header d-flex align-items-center">
-              <h5 className="modal-title">{session.title}</h5>
+              <h5 className="modal-title" id="session-modal-title">{session.title}</h5>
               <span className={`badge ms-2 ${getStatusBadgeClass()}`}>
                 {session.status.charAt(0).toUpperCase() +
                   session.status.slice(1)}
@@ -192,6 +278,8 @@ const SessionModal: React.FC<SessionModalProps> = ({
                 type="button"
                 className="btn-close"
                 onClick={onClose}
+                disabled={isLoading}
+                aria-label="Close modal"
               ></button>
             </div>
             <div className="modal-body">
@@ -230,11 +318,12 @@ const SessionModal: React.FC<SessionModalProps> = ({
                       {session.isPaid ? 'Paid' : 'Not paid'}
                     </span>
                     {isAdmin && session.status === 'approved' && (
-                      <button 
+                      <button
                         className={`btn btn-sm ms-2 ${session.isPaid ? 'btn-outline-success' : 'btn-success'}`}
                         onClick={handlePaymentToggle}
+                        disabled={isLoading}
                       >
-                        {session.isPaid ? 'Mark as Unpaid' : 'Mark as Paid'}
+                        {isLoading ? 'Processing...' : session.isPaid ? 'Mark as Unpaid' : 'Mark as Paid'}
                       </button>
                     )}
                   </div>
@@ -281,10 +370,15 @@ const SessionModal: React.FC<SessionModalProps> = ({
                   <button
                     className="btn btn-success me-2"
                     onClick={handleApprove}
+                    disabled={isLoading}
                   >
-                    <i className="fas fa-check me-1"></i> Approve
+                    <i className="fas fa-check me-1"></i> {isLoading ? 'Processing...' : 'Approve'}
                   </button>
-                  <button className="btn btn-danger" onClick={startReject}>
+                  <button
+                    className="btn btn-danger"
+                    onClick={startReject}
+                    disabled={isLoading}
+                  >
                     <i className="fas fa-times me-1"></i> Reject
                   </button>
                 </div>
@@ -296,6 +390,7 @@ const SessionModal: React.FC<SessionModalProps> = ({
                   className="btn btn-danger me-2"
                   onClick={startDelete}
                   title="Permanently delete this session from the database"
+                  disabled={isLoading}
                 >
                   <i className="fas fa-trash-alt me-1"></i> Delete
                 </button>
@@ -305,6 +400,7 @@ const SessionModal: React.FC<SessionModalProps> = ({
                 <button
                   className="btn btn-outline-secondary"
                   onClick={startCancel}
+                  disabled={isLoading}
                 >
                   <i className="fas fa-ban me-1"></i> Cancel Session
                 </button>
@@ -313,11 +409,16 @@ const SessionModal: React.FC<SessionModalProps> = ({
                 <button
                   className="btn btn-outline-primary me-2"
                   onClick={() => setShowEditModal(true)}
+                  disabled={isLoading}
                 >
                   <i className="fas fa-clock me-1"></i> Reschedule
                 </button>
               )}
-              <button className="btn btn-secondary" onClick={onClose}>
+              <button
+                className="btn btn-secondary"
+                onClick={onClose}
+                disabled={isLoading}
+              >
                 Close
               </button>
             </div>
@@ -380,6 +481,7 @@ const SessionModal: React.FC<SessionModalProps> = ({
                   type="button"
                   className="btn btn-secondary"
                   onClick={() => setShowCancelDialog(false)}
+                  disabled={isLoading}
                 >
                   Back
                 </button>
@@ -390,6 +492,7 @@ const SessionModal: React.FC<SessionModalProps> = ({
                     setShowCancelDialog(false);
                     setShowReasonDialog(true);
                   }}
+                  disabled={isLoading}
                 >
                   Next
                 </button>
@@ -460,6 +563,7 @@ const SessionModal: React.FC<SessionModalProps> = ({
                   type="button"
                   className="btn btn-secondary"
                   onClick={() => setShowDeleteDialog(false)}
+                  disabled={isLoading}
                 >
                   Cancel
                 </button>
@@ -470,6 +574,7 @@ const SessionModal: React.FC<SessionModalProps> = ({
                     setShowDeleteDialog(false);
                     setShowReasonDialog(true);
                   }}
+                  disabled={isLoading}
                 >
                   Next
                 </button>
@@ -520,6 +625,7 @@ const SessionModal: React.FC<SessionModalProps> = ({
                   type="button"
                   className="btn btn-secondary"
                   onClick={() => setShowReasonDialog(false)}
+                  disabled={isLoading}
                 >
                   Cancel
                 </button>
@@ -527,10 +633,15 @@ const SessionModal: React.FC<SessionModalProps> = ({
                   type="button"
                   className="btn btn-primary"
                   onClick={submitActionWithReason}
+                  disabled={isLoading}
                 >
-                  {currentAction === "reject" && "Reject Session"}
-                  {currentAction === "cancel" && "Cancel Session"}
-                  {currentAction === "delete" && "Delete Session"}
+                  {isLoading ? 'Processing...' : (
+                    <>
+                      {currentAction === "reject" && "Reject Session"}
+                      {currentAction === "cancel" && "Cancel Session"}
+                      {currentAction === "delete" && "Delete Session"}
+                    </>
+                  )}
                 </button>
               </div>
             </div>
