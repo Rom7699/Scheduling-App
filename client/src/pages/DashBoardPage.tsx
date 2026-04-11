@@ -10,10 +10,13 @@ const DashboardPage: React.FC = () => {
   const { sessions, getSessions, loading, error } = useSession();
   const { user } = useAuth();
 
-    useEffect(() => {
-      getSessions();
-    }, [getSessions]);
-  
+  useEffect(() => {
+    getSessions();
+  }, [getSessions]);
+
+  const handleRetry = () => {
+    getSessions();
+  };
 
   // Filter sessions by status
   const pendingSessions = sessions.filter(
@@ -25,6 +28,51 @@ const DashboardPage: React.FC = () => {
   const rejectedSessions = sessions.filter(
     (session) => session.status === "rejected"
   );
+
+  const renderSessionsArea = () => {
+    if (loading) {
+      return (
+        <div className="loading-state">
+          <div className="spinner-border text-primary" role="status">
+            <span className="visually-hidden">Loading...</span>
+          </div>
+          <p className="mt-3 text-muted">Loading your sessions…</p>
+        </div>
+      );
+    }
+
+    if (error) {
+      return (
+        <div className="error-state">
+          <div className="error-state-icon">⚠️</div>
+          <h3 className="error-state-title">Something went wrong</h3>
+          <p className="error-state-message">
+            We couldn't load your sessions. Please check your connection and try again.
+          </p>
+          <button className="btn btn-primary retry-btn" onClick={handleRetry}>
+            Try again
+          </button>
+        </div>
+      );
+    }
+
+    if (sessions.length === 0) {
+      return (
+        <div className="empty-state">
+          <div className="empty-state-icon">📭</div>
+          <h3 className="empty-state-title">No sessions yet</h3>
+          <p className="empty-state-message">
+            You don't have any scheduled sessions. Book your first session to get started.
+          </p>
+          <a href="/home" className="btn btn-primary">
+            Book your first session
+          </a>
+        </div>
+      );
+    }
+
+    return <CalendarView />;
+  };
 
   return (
     <div className="dashboard-page">
@@ -42,12 +90,6 @@ const DashboardPage: React.FC = () => {
             </div>
           </div>
         </div>
-
-        {error && (
-          <div className="alert alert-danger rounded-warm mb-4">
-            <strong>Error:</strong> {error}
-          </div>
-        )}
 
         {/* Stats Cards */}
         <div className="row g-4 mb-5">
@@ -108,27 +150,20 @@ const DashboardPage: React.FC = () => {
                 </p>
               </div>
               <div className="dashboard-card-body">
-                {loading ? (
-                  <div className="loading-state">
-                    <div className="spinner-border text-primary" role="status">
-                      <span className="visually-hidden">Loading...</span>
-                    </div>
-                    <p className="mt-3 text-muted">Loading your sessions...</p>
-                  </div>
-                ) : (
-                  <CalendarView />
-                )}
+                {renderSessionsArea()}
               </div>
             </div>
           </div>
         </div>
 
         {/* Payment Summary Section */}
-        <div className="row mb-5">
-          <div className="col-12">
-            <PaymentSummary sessions={sessions} />
+        {!loading && !error && sessions.length > 0 && (
+          <div className="row mb-5">
+            <div className="col-12">
+              <PaymentSummary sessions={sessions} />
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );
