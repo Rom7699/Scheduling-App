@@ -225,13 +225,13 @@
 .empty-state-title {
   font-size: var(--text-xl);
   font-weight: var(--font-semibold);
-  color: var(--text-primary);
+  color: #dc2626;
   margin-bottom: 0.5rem;
 }
 
 .empty-state-message {
   font-size: var(--text-base);
-  color: var(--text-tertiary);
+  color: #dc2626;
   max-width: 360px;
   margin-bottom: 1.5rem;
 }
@@ -255,13 +255,13 @@
 .error-state-title {
   font-size: var(--text-xl);
   font-weight: var(--font-semibold);
-  color: var(--text-primary);
+  color: #dc2626;
   margin-bottom: 0.5rem;
 }
 
 .error-state-message {
   font-size: var(--text-base);
-  color: var(--text-tertiary);
+  color: #dc2626;
   max-width: 360px;
   margin-bottom: 1.5rem;
 }
